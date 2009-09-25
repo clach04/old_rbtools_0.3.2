@@ -1,0 +1,43 @@
+# minor changes to template from http://community.ingres.com/wiki/Integration_Plan_Template
+
+Integration Plan Template
+
+Integration Plan for Ingres Issue <Insert issue number here>
+
+Targeted submission date: <Insert date on which submission is planned>
+
+Change author: <Your name, as known to the Ingres Project>
+
+Reviewer: <Appropriate module owner>
+
+Related changes: <Any prior changes related to this one>
+
+Overview : Bug # <Insert the bug number here>
+
+Describe the problem that your change addresses or the feature that you are implementing.
+
+A one-paragraph description of the changes. This should give enough information so that someone skimming the IP can determine if the contents are of interest.
+
+Workarounds: Any way the problem can be avoided without this change.
+
+Patch Notes: Incorporate some text for inclusion in the next set of patch or release notes.
+
+Facilities affected:Identify the Ingres facilities impacted by the change e.g. opf/opq so that we can confirm that an appropriate team of reviewers are involved in the approval process.
+
+Expected impact on installations and/or build process:Typically "None", but if change adds a new component, directory, process, etc., or if it requires a rebuild beyond the directly impacted components, it should be mentioned here.
+
+Regression Test results:Regression suites must be run, even if they do not directly test your change, but to assure your change did not break something else in an unexpected way.
+
+Any deviations from the canons noted. If unexpected differences exist, then either canon or fix has the problem. In either case the need for further evaluation and changes are strongly suggested.
+
+Additional tests:A complete description of the custom tests performed to verify this fix. If the tests are too extensive to be included in line, then the tests may be included in an attachment.
+
+The thought and effort put into the test plan should be some significant fraction of the effort that went into the fix. The scripts used to implement the tests should be as platform generic as possible, and conform as nearly as practical to the Ingres bugs script standard) The importance of this cannot be over emphasized. You must provide a test case unless you get approval from your manager, or if the change is purely to documentation. These scripts will not only be used in verifying this bug fix prior to building a patch, but will be incorporated into the formal QA suite.
+
+Merging into other code lines: This section indicates what other code lines (if any) are candidates for merging these changes into.
+
+Files affected: Identify the exact files (and directories) which have been changed (or added or deleted).
+
+Description of change:This should be a complete description of the objective and rational for your change. This is different from the overview in that it should focus on your implementation.
+
+Differences: While the traditional generated differences are always acceptable, technicians should be encouraged to use alternate methods of displaying what they have changed if this improves clarity, and does not require excessive work. For example, if the fix was to delete a line from a small function, it is much clearer to copy the function source into the IP, and put an arrow and comment next to the deleted line.

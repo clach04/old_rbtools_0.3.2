@@ -1,0 +1,41 @@
+Piccolo change template (based on Usha's IP's)
+
+
+Targeted Submission Date : SUBMIT_DATE
+Private Path: PICCOLO_CLIENT_NAME
+Issue(s) : SD issue: SD_ISSUE_NUM_LIST
+Related Change(s) #: N/A OR CHANGENUMBER(S)
+
+Overview:
+Ingres Star server still refers to symbol table definition II_GCNxx_LCL_VNODE. This Ingres variable has been deprecated since 
+II 2.5. Use the config.dat parameter local_vnode instead.
+
+Background Information:
+N/A.
+
+Revision Information
+N/A.
+
+Workaround:
+N/A.
+
+Release Notes:
+
+    (GENERIC)
+    BUG NOTE
+
+Facilities affected:
+
+    PICCOLO PATHS (SANS FILENAMES)
+
+Expected impact on installations and/or builds:
+
+None.
+
+Merging into other code lines:
+N/A 
+
+Description of changes:
+
+YOU CHANGE DESCRIPTION
+

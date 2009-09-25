@@ -1,0 +1,5 @@
+=== ingtest!gwts1000!canons gw600.udb rev 2 add ====
+0a1,3
+> do not add! this is a test!
+> tests p reserve -a on files that where deleted so
+> ADD version is NOT version 0/1.
