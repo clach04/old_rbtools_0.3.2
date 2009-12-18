@@ -99,6 +99,7 @@ OPEN_BROWSER    = False
 
 # Debugging.  For development...
 DEBUG           = False
+DEBUG           = True
 
 ###
 # End user-settable variables.
@@ -2132,12 +2133,270 @@ SCMCLIENTS = (
     ClearCaseClient(),
 )
 
+####################################################################
+import logging
+LOG_FILENAME = '/tmp/logging_example.out'
+logging.basicConfig(filename=LOG_FILENAME, format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+#logging.basicConfig(level=logging.DEBUG)
+#logging.basicConfig()
+class PiccoloClient(SCMClient):
+    """A wrapper around the p/p2 Piccolo tool that fetches repository information
+    and generates compatible diffs.
+    
+    Recommended piccolo client version is 2.2.4 (massive performance benefits
+    under Windows with this release).
+    
+    NOTE does not yet handle branches! Integrates are sort of handled.
+    
+    TODO guess summary/description based on first set of comments?
+    TODO for existing changenumber fill in bug number(s)
+    """
+    def get_repository_info(self):
+        if os.environ.get('DISABLE_POSTREVIEWPICCOLOCLIENT'):
+            # User requested Piccolo support in postreview be disabled
+            return None
+        logging.info('diff_filename %r', options.diff_filename)
+        if options.diff_filename:
+            perform_piccolo_check=False
+        else:
+            perform_piccolo_check=True
+        if perform_piccolo_check:
+            if not check_install('p help'): # or "p here"?
+                return None
+        
+        # Ingres Corp only has 1 repository (although there are gateways)
+        """
+        The Piccolo server (or path) can be obtained with NEWer clients in a very easy fashion:
+        
+        version 2.2.0 has a neat option:
+        
+            p map -x
+        
+        version 2.1.24 does NOT support -x (which restricts to things you have mapped, i.e. can limit the connects) but does support map:
+        
+            p map
+        
+        NOTE check version requires Rogers changes.
+        
+        Can then grep for connect, etc.
+        """
+        default_piccolo_server = 'usilsuxx:1666'
+        repository_path = options.p2_server or default_piccolo_server # Should try and pick this up from client map, really need a new piccolo command list (first) piccolo server
+        
+        return RepositoryInfo(path=repository_path, supports_changesets=False)
+        
+    def _p_rcompare_diff(self, files):
+        """Performs a diff across all modified files in a Piccolo client repository
+        or only a diff against specified files.
+        
+        NOTE recommended minimum version of piccolo client is 2.2.1alpha; (for binary and deleted file improvements on diffs/rcompare)
+        """
+        logging.info('CMC files %r', files)
+        logging.info('CMC options.piccolo_flist %r', options.piccolo_flist)
+        logging.info('CMC options.diff_filename %r', options.diff_filename)
+        if options.diff_filename:
+            """Example:
+            
+            Step 1 - get diff:
+                ## cd $ING_SRC
+                ## cd %ING_SRC%
+                p working | p rcompare -l - > example_pic.diff
+                
+            Step 2 - post review
+                jython post-review  --p2-diff-filename example_pic.diff --server=http://reviewboard.ingres.prv
+
+                post-review  --server=http://reviewboard.ingres.prv --summary="This is a post-review test by hanal04" --description="Checking current automatic field entry from the command line." --bugs-closed="123456, 98734" --target-groups="admin grp" --target-people="clach04" --submit-as="hanal04 -r 999999"
+            """
+            diffbytes=open(options.diff_filename, 'r').read() ## TODO consider strings instead of bytes? NOTE not using binary as we want to avoid \r values.... This may need further work, this is mostly for win32
+            diff_text=diffbytes
+        else:
+            files_list = files
+            if not files_list and options.piccolo_flist:
+                filteptr = open(options.piccolo_flist)
+                files_list = filteptr.readlines()
+            logging.info('CMC files_list %r', files_list)
+            if options.piccolo_flist:
+                if options.piccolo_flist.strip() == '-':
+                    print 'WARNING piccolo - param to -l not supported (yet?), ignoring and assuming all (working) files'
+                    options.piccolo_flist = None
+            
+            # Set piccolo command line command
+            # TODO do we need to redirect and capture stderr? "2>&1".
+            if options.piccolo_flist:
+                options.piccolo_flist = os.path.abspath(options.piccolo_flist)
+                pic_command_str = "p working -l %s | p rcompare -l -" % options.piccolo_flist # TODO do we need to escape the filepath?
+            else:
+                pic_command_str = "p working | p rcompare -l -"
+                # be nice if piccolo rcompare supported a new param -working (or similar)
+            try:
+                # Jython only test, consider using a robust check platform module, http://downloads.egenix.com/python/platform.py I think there are others
+                os_plat=os.get_os_type()
+            except AttributeError:
+                os_plat=''
+            if sys.platform.startswith('win') or os_plat=='nt':
+                # cpython test followed by Jython test
+                ## TODO is "cd $ING_SRC" needed? rather Ingres build specific....
+                diff_text=execute(['cmd', '/C', pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
+            else:
+                ## TODO is "cd $ING_SRC" needed?
+                # Assume Unix/shell
+                diff_text=execute(['sh', '-c', pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
+        return (diff_text, None)
+    
+    def _p_describe_diff(self, files):
+        """Extracts diff from existing (already submitted) piccolo change"""
+        """A wrapper around the p/p2 Piccolo tool that ONLY submits reviews of existing changes
+        This could be made part of PiccoloChangeClient() but this is at the moment only for testing
+        (i..e use existing changes for demo/test data).
+        
+        Suggested usage:
+        
+        Unix
+            env DISABLE_POSTREVIEWPICCOLOCLIENT=true python /export/home/ingres/clach04/scripts/rb_post.py --server=http://clach04-745.ingres.prv:8000 -c 493916
+
+        
+        TODO merge into PiccoloClient (i.e. remove PiccoloChangeClient) so that if -c flag is present it does changes
+        """
+        if not options.changenumber:
+            raise APIError('piccolo changenumber missing on command line')
+        
+        #FIXME parse and then transform the diff
+        change_text = execute(["p", 'describe', '-s', 'full', options.changenumber])
+        change_text = change_text.split('\n')
+        
+        def piccolo_find_section_start(startcount, expected_marker, change_text):
+            """
+            startcount integer starting point
+            expected_marker string expected start text
+            change_text = list of lines
+            
+            returns line startnumber
+            """
+            linecount = startcount
+            line = ''
+            while line != expected_marker:
+                linecount += 1
+                line = change_text[linecount]
+            return linecount        
+        expected_marker = '- description -'
+        description_start_line = piccolo_find_section_start(3, expected_marker, change_text)
+        expected_marker = '- differences -'
+        diff_start_line = piccolo_find_section_start(description_start_line, expected_marker, change_text)
+
+        # Only overide if not specifed on command line? TODO decided if we always clobber!
+        if not options.summary:
+            options.summary = change_text[3] # 2nd line from of p describe -s descript 493916, etc
+            # clean leading chars 
+            options.summary = options.summary[len('   V  '):]
+        if not options.description:
+            ## TODO release notes!! - they currently get dumped to the end, start would be better
+            options.description = '\n'.join(change_text[description_start_line+2:diff_start_line-1])  # output from p describe -s descript 493916 + p describe -s relnotes 493916
+        
+        difftextlist = []
+        for line in change_text[diff_start_line+2:]:
+            if line:
+                if line.startswith('>') or line.startswith('<') or line.startswith('---') or line[0] in string.digits:
+                    difftextlist.append(line)
+                else:
+                    # Assume we have a piccolo tree + filename + revision
+                    # what about branches?                     raise APIError('PiccoloChangeClient.diff unexpected diff context')
+                    pictree, picfilename, dummy, picrev = line.split()
+                    difftextlist.append('=== %s %s rev %d ====' % (pictree, picfilename, int(picrev)-1))
+
+        difftext = '\n'.join(difftextlist)
+        return (difftext, None)
+    
+    def diff(self, files):
+        if not options.changenumber:
+            # Normal compare and diff
+            return self._p_rcompare_diff(files)
+        else:
+            # existing change, either test data or for seeing change in context (not actually going to be reviewed)
+            return self._p_describe_diff(files)
+    
+    def guess_group(self, diff_str):
+        """naive guess IP group based on piccolo branch name/tree
+        Either checks all (default) or uses the path of (only) the first file in the diff
+        """
+        rawstr = r"""^=== (\S*) (\S*) rev (\d+) ====$"""
+        compile_obj = re.compile(rawstr,  re.MULTILINE)
+        STOP_ON_FIRST=True
+        STOP_ON_FIRST=False
+        mailgroups={}
+        for ppath, pfilename, prev in compile_obj.findall(diff_str):
+            if '!gateway!' in ppath:
+                mailgroups['ea'] = None
+            else:
+                first_two_dirs=ppath.split('!', 2)[:2]
+                if first_two_dirs[0] == 'ingres':
+                    mailgroups[first_two_dirs[1]] = None
+            if STOP_ON_FIRST:
+                break
+        
+        mailgroups=list(mailgroups.keys())
+        mailgroups.sort()
+        result = ','.join(mailgroups)
+        return result
+        
+    def guess_branch(self, diff_str):
+        """naive guess piccolo branch name
+        Uses the path of (only) the first file in the diff, and uses the first 2 directories
+        """
+        tmp_line=diff_str.split(' ', 2)[1] # extract path of first file from piccolo diff header
+        first_two_dirs=tmp_line.split('!', 2)[:2]
+        return '!'.join(first_two_dirs)
+        
+    def guess_bugs(self, diff_str):
+        """naive guess piccolo bug(s)
+        Uses the bug or sirs found in the (in the additions) diff text.
+        Can either use first found or all (default)
+        """
+        rawstr = r"""^>.*(SIR|BUG)\s*(?P<bug_or_sir>[0123456789]*)"""
+        compile_obj = re.compile(rawstr,  re.MULTILINE)
+        STOP_ON_FIRST=True
+        STOP_ON_FIRST=False
+        bugs_and_sirs={}
+        for change_type, bnum in compile_obj.findall(diff_str):
+            #change_type = change_type.upper()
+            bnum = str(int(bnum))
+            bugs_and_sirs[bnum] = None
+            if STOP_ON_FIRST:
+                break
+        
+        bugs_and_sirs_list=list(bugs_and_sirs.keys())
+        bugs_and_sirs_list.sort()
+        result = ','.join(bugs_and_sirs_list)
+        return result
+    
+    def add_options(self, parser):
+        """
+        Adds options to an OptionParser.
+        NOT used in RBTool - artifact from older version :-( Here as a yet-another reminder
+        """
+        ## TODO move this into base class and offer both file passing and reading the contents and passing into diff()
+        ## see http://groups.google.com/group/reviewboard/browse_thread/thread/2c6b6ee44754b6d9
+        ## this way we know the -l flag will not be used in the future for other options! ;-)
+        parser.add_option("-l", "--filelist_filename",
+                          dest="piccolo_flist", default=None,
+                          help='file containing list of files in change, e.g. "p working | grep gwpr > sc"')
+        
+        parser.add_option("-c", "--changenumber",
+                          dest="changenumber", default=None,
+                          help='Piccolo (existing) change number')
+
+### re-define SCMCLIENTS, this makes merging changes easier (than customizing SCMCLIENTS) :-)
+SCMCLIENTS = (
+    SVNClient(),
+    PiccoloClient(),
+)
+####################################################################
+
 def debug(s):
     """
     Prints debugging information if post-review was run with --debug
     """
     if DEBUG or options and options.debug:
-        print ">>> %s" % s
+        logging.debug(">>> %s" % s)
 
 
 def make_tempfile():
@@ -2459,6 +2718,36 @@ def parse_options(args):
     parser.add_option("-d", "--debug",
                       action="store_true", dest="debug", default=DEBUG,
                       help="display debug output")
+    #############################################
+    parser.add_option("--p2-diff-filename", "--diff-filename", "--diff_filename",
+                      dest="diff_filename", default=None,
+                      help='PICCOLO ONLY: file containing diffs/change, i.e. do not perform diff, just post provided file')
+    
+    parser.add_option("-l", "--p2-filelist-filename",
+                      dest="piccolo_flist", default=None,
+                      help='PICCOLO ONLY: file containing list of files in change, e.g. "p working | grep gwpr > list_of_files"')
+    
+    parser.add_option("-c", "--p2-changenumber",
+                      dest="changenumber", default=None,
+                      help='PICCOLO ONLY: Piccolo (existing) change number, takes an existing change and posts for review')
+    
+    parser.add_option("--p2-server",
+                      dest="p2_server", default='usilsuxx:1666', # not sure if this should just be None
+                      help='PICCOLO ONLY: Piccolo repository server name')
+    
+    parser.add_option("--p2-do-not-guess-branch",
+                      action="store_false", dest="p2_guess_branch", default=True,
+                      help='PICCOLO ONLY: do NOT auto fill in branch based on first 2 dirs in first file diff')
+    
+    parser.add_option("--p2-do-not-guess-bugs",
+                      action="store_false", dest="p2_guess_bugs", default=True,
+                      help='PICCOLO ONLY: do NOT auto fill in bugs based bug/sir number(s) found in diffs')
+    
+    parser.add_option("--p2-do-not-guess-group",
+                      action="store_false", dest="p2_guess_group", default=True,
+                      help='PICCOLO ONLY: do NOT auto fill in group(s) based path of first file in diffs')
+    
+    #############################################
 
     (globals()["options"], args) = parser.parse_args(args)
 
@@ -2551,6 +2840,7 @@ def main():
         load_config_file(os.path.join(homepath, ".reviewboardrc"))
     cookie_file = os.path.join(homepath, ".post-review-cookies.txt")
 
+    debug('sys.argv %r' % sys.argv)
     args = parse_options(sys.argv[1:])
 
     repository_info, tool = determine_client()
@@ -2581,6 +2871,17 @@ def main():
     else:
         diff, parent_diff = tool.diff(args)
 
+    ################################################################
+    if isinstance(tool, PiccoloClient) and options.p2_guess_branch and options.branch is None:
+        options.branch = tool.guess_branch(diff)
+    
+    if isinstance(tool, PiccoloClient) and options.p2_guess_bugs and options.bugs_closed is None:
+        options.bugs_closed= tool.guess_bugs(diff)
+    
+    if isinstance(tool, PiccoloClient) and options.p2_guess_group and options.target_groups is None:
+        options.target_groups = tool.guess_group(diff)
+    ################################################################
+    
     if isinstance(tool, PerforceClient) and changenum is not None:
         changenum = tool.sanitize_changenum(changenum)
 

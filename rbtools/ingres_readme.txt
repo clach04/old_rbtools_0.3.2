@@ -41,9 +41,25 @@ platform but is *required* under VMS.
 E.g.
 
     p working | p rcompare -l - > SMALL_EXAMPLE_PIC.DIFF
-    postreview --server=http://reviewboard.ingres.prv --submit-as=FRED --diff_filename=SMALL_EXAMPLE_PIC.DIFF
+    postreview --server=http://reviewboard.ingres.prv --submit-as=FRED --p2-diff-filename=SMALL_EXAMPLE_PIC.DIFF
 
 Can also post review titles, testing done from a file, etc.
 
     postreview --server=http://reviewboard.ingres.prv --submit-as=FRED  --summary="IP for my cool changes" --testing-done-file=testing_demo.txt
+
+
+For more information and help issue:
+
+    postreview -h
+
+
+All Piccolo specific flags are marked with "p2"
+
+
+Release History
+---------------
+
+20090910    Initial.
+
+20091218    Auto fills in; bugs, branch, group (mailing lists).
 
