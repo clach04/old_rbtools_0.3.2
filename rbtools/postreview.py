@@ -99,7 +99,7 @@ OPEN_BROWSER    = False
 
 # Debugging.  For development...
 DEBUG           = False
-DEBUG           = True
+#DEBUG           = True
 
 ###
 # End user-settable variables.
@@ -2135,10 +2135,12 @@ SCMCLIENTS = (
 
 ####################################################################
 import logging
-LOG_FILENAME = '/tmp/logging_example.out'
-logging.basicConfig(filename=LOG_FILENAME, format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
-#logging.basicConfig(level=logging.DEBUG)
-#logging.basicConfig()
+if DEBUG:
+    LOG_FILENAME = '/tmp/logging_example.out'
+    #logging.basicConfig(level=logging.DEBUG)
+    #logging.basicConfig()
+    logging.basicConfig(filename=LOG_FILENAME, format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+
 class PiccoloClient(SCMClient):
     """A wrapper around the p/p2 Piccolo tool that fetches repository information
     and generates compatible diffs.

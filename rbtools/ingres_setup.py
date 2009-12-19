@@ -1,6 +1,7 @@
 """
 Issue:
 
+    c:\python24\python ingres_setup.py py2exe
     setup.py py2exe
 
 Quick-N-Dirty create win32 binaries and zip file script.
