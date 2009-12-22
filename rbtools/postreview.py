@@ -107,6 +107,7 @@ DEBUG           = False
 
 
 VERSION = "0.8"
+VERSION = VERSION + '.Ingres.0.5'
 
 user_config = None
 tempfiles = []
