@@ -2475,7 +2475,7 @@ class PiccoloClient(SCMClient):
         
         if options.submit_as is None:
             options.submit_as = os.environ.get('USER')
-            if options.submit_as.lower() == 'ingres':
+            if options.submit_as and options.submit_as.lower() == 'ingres':
                 options.submit_as = None
         
         #if options.username is None:
