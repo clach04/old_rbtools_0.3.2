@@ -31,10 +31,19 @@ from rbtools import get_package_version, is_release, VERSION
 PACKAGE_NAME = 'RBTools'
 
 if is_release():
-    download_url = "http://downloads.review-board.org/releases/%s/%s.%s/" % \
+    download_url = "http://downloads.reviewboard.org/releases/%s/%s.%s/" % \
                    (PACKAGE_NAME, VERSION[0], VERSION[1])
 else:
-    download_url = "http://downloads.review-board.org/nightlies/"
+    download_url = "http://downloads.reviewboard.org/nightlies/"
+
+
+install_requires = []
+
+
+try:
+    import json
+except ImportError:
+    install_requires.append('simplejson')
 
 
 setup(name=PACKAGE_NAME,
@@ -46,7 +55,7 @@ setup(name=PACKAGE_NAME,
               'post-review = rbtools.postreview:main',
           ],
       },
-      install_requires=['simplejson'],
+      install_requires=install_requires,
       dependency_links = [
           download_url,
       ],
@@ -54,7 +63,7 @@ setup(name=PACKAGE_NAME,
       include_package_data=True,
       maintainer="Christian Hammond",
       maintainer_email="chipx86@chipx86.com",
-      url="http://www.review-board.org/",
+      url="http://www.reviewboard.org/",
       download_url=download_url,
       classifiers=[
           "Development Status :: 4 - Beta",
