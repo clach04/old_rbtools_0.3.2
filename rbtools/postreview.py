@@ -88,6 +88,7 @@ else:
 #   REVIEWBOARD_URL = "http://reviewboard.example.com"
 #
 REVIEWBOARD_URL = None
+#REVIEWBOARD_URL = 'http://reviewboard.ingres.prv'
 
 # Default submission arguments.  These are all optional; run this
 # script with --help for descriptions of each argument.
@@ -2146,26 +2147,89 @@ class PiccoloClient(SCMClient):
     """A wrapper around the p/p2 Piccolo tool that fetches repository information
     and generates compatible diffs.
     
-    Recommended piccolo client version is 2.2.4 (massive performance benefits
-    under Windows with this release).
+    Recommended piccolo client version is 2.2.9.
     
-    NOTE does not yet handle branches! Integrates are sort of handled.
+    Set environment variables:
+        DISABLE_POSTREVIEWPICCOLOCLIENT - to disable piccolo support in postreview
+        ENABLE_POSTREVIEWPICCOLOCLIENT  - to force the use of the piccolo command line
+
     
+    NOTE does not yet handle branches! Integrates are sort of handled based on "p working" output used as input to rcompare - review/change looks like a regulr change though.
+    
+    TODO set REVIEWBOARD_URL/config['REVIEWBOARD_URL'] if not set?
     TODO guess summary/description based on first set of comments?
     TODO for existing changenumber fill in bug number(s)
+    will set options.username/options.submit_as if not set, based on USER operating system variable (required by piccolo, so probably already set)
+    
+        "%APPDATA%"\.post-review-cookies.txt
     """
     def get_repository_info(self):
+        self.p_minver = (2, 2, 9)
+        self.p_minver = list(self.p_minver)
+        self.p_minver_str = '.'.join(map(str,self.p_minver))
+        """
+        if options.debug:
+            global DEBUG
+            DEBUG           = True
+            .....
+        """
+        
         if os.environ.get('DISABLE_POSTREVIEWPICCOLOCLIENT'):
             # User requested Piccolo support in postreview be disabled
             return None
-        logging.info('diff_filename %r', options.diff_filename)
-        if options.diff_filename:
+        if os.environ.get('ENABLE_POSTREVIEWPICCOLOCLIENT'):
+            # User requested Piccolo support in postreview be enabled without check
             perform_piccolo_check=False
         else:
-            perform_piccolo_check=True
+            logging.info('diff_filename %r', options.diff_filename)
+            if options.diff_filename:
+                perform_piccolo_check=False
+            else:
+                perform_piccolo_check=True
+            
+        try:
+            # Jython only test, consider using a robust check platform module, http://downloads.egenix.com/python/platform.py I think there are others
+            os_plat=os.get_os_type()
+        except AttributeError:
+            os_plat=''
+        if sys.platform.startswith('win') or os_plat == 'nt':
+            self._command_args = ['cmd', '/C']
+        else:
+            # probably Unix like...
+            self._command_args = ['sh', '-c']
+
         if perform_piccolo_check:
-            if not check_install('p help'): # or "p here"?
+            if not check_install('p help'): # or "p here"? ideally 'p version -c' and then report issues with version (-c option was added to version 2.2.0 of piccolo; p2main.c -> 66 Change 2041 -> 66 (change) on 14-oct-2008 by whiro01)
+                # "p version -c" does not require current directory to be in MAPPATH (does not even need MAPPATH set)
+                # p help needs mappath (and connection to server)
                 return None
+            # so we have a piccolo command in the path
+            # check version of piccolo client .........
+            pic_command_str = 'p version -c'
+            pver_text = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
+            logging.info('pver_text %r', pver_text)
+            if pver_text.startswith('Invalid option:'):
+                # too old, does not support -c
+                print ''
+                print 'Piccolo version too old, (version -c support missing). Need version %s' % self.p_minver_str
+                return None
+            # extract version
+            pver_text = pver_text.strip()
+            pver_text = pver_text.rsplit(' ', 1)[1]
+            pver = pver_text.rsplit('.')
+            pver = map(int, pver)
+            if pver < self.p_minver:
+                print ''
+                print 'Piccolo version too old. Found version %s need version %s' % (pver_text, self.p_minver_str)
+                return None
+        
+        if options.submit_as is None:
+            options.submit_as = os.environ.get('USER')
+            if options.submit_as.lower() == 'ingres':
+                options.submit_as = None
+        
+        #if options.username is None:
+        #    options.username = os.environ.get('USER')
         
         # Ingres Corp only has 1 repository (although there are gateways)
         """
@@ -2183,8 +2247,11 @@ class PiccoloClient(SCMClient):
         
         Can then grep for connect, etc.
         """
-        default_piccolo_server = 'usilsuxx:1666'
+        default_piccolo_server = 'usilsuxx:1666'  # and/or pick up from "p map" filtering for connect(s) (shell approach would be; p map |grep '^connect' | awk '{print $4}') if perform_piccolo_check is True
         repository_path = options.p2_server or default_piccolo_server # Should try and pick this up from client map, really need a new piccolo command list (first) piccolo server
+        
+        if options.server is None:
+            options.server = 'http://reviewboard.ingres.prv'  # should consider overridding _get_server_from_config()
         
         return RepositoryInfo(path=repository_path, supports_changesets=False)
         
@@ -2192,7 +2259,11 @@ class PiccoloClient(SCMClient):
         """Performs a diff across all modified files in a Piccolo client repository
         or only a diff against specified files.
         
-        NOTE recommended minimum version of piccolo client is 2.2.1alpha; (for binary and deleted file improvements on diffs/rcompare)
+        TODO add check for piccolo version and warn user if old
+        NOTE recommended minimum version of piccolo client is 2.2.9; for auto delete file on "reserve -d " improvement
+        NOTE recommended minimum version of piccolo client is 2.2.4; massive performance benefits under Windows with this release
+        NOTE recommended absolute minimum version of piccolo client is 2.2.1alpha; (for binary and deleted file improvements on diffs/rcompare)
+        NOTE recommended minimum version of piccolo client is 2.2.0; for -c option to "p version"
         """
         logging.info('CMC files %r', files)
         logging.info('CMC options.piccolo_flist %r', options.piccolo_flist)
@@ -2225,25 +2296,25 @@ class PiccoloClient(SCMClient):
             
             # Set piccolo command line command
             # TODO do we need to redirect and capture stderr? "2>&1".
+            """
             if options.piccolo_flist:
                 options.piccolo_flist = os.path.abspath(options.piccolo_flist)
                 pic_command_str = "p working -l %s | p rcompare -l -" % options.piccolo_flist # TODO do we need to escape the filepath?
             else:
                 pic_command_str = "p working | p rcompare -l -"
                 # be nice if piccolo rcompare supported a new param -working (or similar)
-            try:
-                # Jython only test, consider using a robust check platform module, http://downloads.egenix.com/python/platform.py I think there are others
-                os_plat=os.get_os_type()
-            except AttributeError:
-                os_plat=''
-            if sys.platform.startswith('win') or os_plat=='nt':
-                # cpython test followed by Jython test
-                ## TODO is "cd $ING_SRC" needed? rather Ingres build specific....
-                diff_text=execute(['cmd', '/C', pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
+            """
+            if options.piccolo_flist:
+                options.piccolo_flist = os.path.abspath(options.piccolo_flist)
+                working_params = '-l %s ' % options.piccolo_flist # TODO do we need to escape the filepath?
             else:
-                ## TODO is "cd $ING_SRC" needed?
-                # Assume Unix/shell
-                diff_text=execute(['sh', '-c', pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
+                working_params = ' '
+            
+            # use -s flag for server side diffs to ensure consistent "\ No newline at end of file" output (e.g. like gnu diff) if newlines are missing at EOF
+            pic_command_str = 'p working %s | p rcompare -s -l -' % working_params
+            # be nice if piccolo rcompare supported a new param -working (or similar)
+            
+            diff_text=execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
         return (diff_text, None)
     
     def _p_describe_diff(self, files):
@@ -2355,13 +2426,17 @@ class PiccoloClient(SCMClient):
         Can either use first found or all (default)
         """
         rawstr = r"""^>.*(SIR|BUG)\s*(?P<bug_or_sir>[0123456789]*)"""
-        compile_obj = re.compile(rawstr,  re.MULTILINE)
+        compile_obj = re.compile(rawstr, re.IGNORECASE| re.MULTILINE)
         STOP_ON_FIRST=True
         STOP_ON_FIRST=False
         bugs_and_sirs={}
         for change_type, bnum in compile_obj.findall(diff_str):
             #change_type = change_type.upper()
-            bnum = str(int(bnum))
+            try:
+                bnum = str(int(bnum))
+            except ValueError:
+                # that was not an integer!
+                continue
             bugs_and_sirs[bnum] = None
             if STOP_ON_FIRST:
                 break
@@ -2388,10 +2463,31 @@ class PiccoloClient(SCMClient):
                           help='Piccolo (existing) change number')
 
 ### re-define SCMCLIENTS, this makes merging changes easier (than customizing SCMCLIENTS) :-)
+"""
+# VMS no fork emulation
+def not_implemented(*args, **kwargs):
+    ## VMS emulation :-)
+    print (args, kwargs)
+    print 'os.fork is missing'
+    ## stupid traceback gen
+    raise NotImplemented('my fork')
+    #import traceback
+    #traceback.print_exc(file=sys.stderr)
+os.fork = not_implemented ## monkey patch! pretend to be VMS
+subprocess.Popen = not_implemented ## monkey patch! pretend to be VMS
+"""
 SCMCLIENTS = (
-    SVNClient(),
     PiccoloClient(),
 )
+tmp_platform = sys.platform
+if 'java' in tmp_platform.lower():
+    jv_props = sys.getBaseProperties()
+    #jv_props = dict(jv_props)
+    tmp_platform = jv_props['os.name']
+if tmp_platform != 'OpenVMS':
+    # i.e. platform supports subprocess and/or fork
+    SCMCLIENTS = (SVNClient(),) + SCMCLIENTS
+del tmp_platform
 ####################################################################
 
 def debug(s):
@@ -2724,7 +2820,7 @@ def parse_options(args):
     #############################################
     parser.add_option("--p2-diff-filename", "--diff-filename", "--diff_filename",
                       dest="diff_filename", default=None,
-                      help='PICCOLO ONLY: file containing diffs/change, i.e. do not perform diff, just post provided file')
+                      help='PICCOLO ONLY: file containing diffs/change, i.e. do not perform diff, just post provided file. See http://reviews.reviewboard.org/r/1197/')
     
     parser.add_option("-l", "--p2-filelist-filename",
                       dest="piccolo_flist", default=None,
@@ -2736,7 +2832,7 @@ def parse_options(args):
     
     parser.add_option("--p2-server",
                       dest="p2_server", default='usilsuxx:1666', # not sure if this should just be None
-                      help='PICCOLO ONLY: Piccolo repository server name')
+                      help='PICCOLO ONLY: Piccolo repository server name. Piccolo specific version of --repository-url. TODO consider allowing repository-url if piccolo is specified and then ditch this param. Also see http://reviews.reviewboard.org/r/1393')
     
     parser.add_option("--p2-do-not-guess-branch",
                       action="store_false", dest="p2_guess_branch", default=True,
