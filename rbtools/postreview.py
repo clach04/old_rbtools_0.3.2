@@ -3275,12 +3275,19 @@ def main():
         if options.diff_filename == '-':
             diff = sys.stdin.read()
         else:
+            cwd = os.path.abspath(os.getcwd())
             try:
-                fp = open(os.path.join(origcwd, options.diff_filename), 'r')
+                # options.diff_filename may be an absolute or a relative path
+                os.chdir(origcwd)
+                # see http://reviews.reviewboard.org/r/1584
+                # VMS cpython base path takes vms paths ike tmp:somefile (tmp device), and then prefixes the current directory!
+                #options.diff_filename = os.path.abspath(options.diff_filename)
+                fp = open(options.diff_filename, 'r')
                 diff = fp.read()
                 fp.close()
             except IOError, e:
                 die("Unable to open diff filename: %s" % e)
+            os.chdir(cwd)
     else:
         diff, parent_diff = tool.diff(args)
 
