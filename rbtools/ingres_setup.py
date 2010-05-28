@@ -6,6 +6,8 @@ Issue:
 
 Quick-N-Dirty create win32 binaries and zip file script.
 Zero error checking.
+
+TODO inject 'py2exe' into sys.argv?
 """
 import os
 import glob
