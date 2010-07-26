@@ -12,6 +12,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import string
 import urllib
 import urllib2
 from optparse import OptionParser
@@ -2427,7 +2428,7 @@ class PiccoloClient(SCMClient):
         if os.environ.get('DISABLE_POSTREVIEWPICCOLOCLIENT'):
             # User requested Piccolo support in postreview be disabled
             return None
-        if os.environ.get('ENABLE_POSTREVIEWPICCOLOCLIENT'):
+        if options.p2changenumber or os.environ.get('ENABLE_POSTREVIEWPICCOLOCLIENT'):
             # User requested Piccolo support in postreview be enabled without check
             perform_piccolo_check=False
         else:
@@ -2562,6 +2563,7 @@ class PiccoloClient(SCMClient):
             
             # use -s flag for server side diffs to ensure consistent "\ No newline at end of file" output (e.g. like gnu diff) if newlines are missing at EOF
             pic_command_str = 'p working %s | p rcompare -s -l -' % working_params
+            pic_command_str = 'p working %s | p rcompare -l -' % working_params  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
             # be nice if piccolo rcompare supported a new param -working (or similar)
             
             diff_text=execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
@@ -2581,11 +2583,11 @@ class PiccoloClient(SCMClient):
         
         TODO merge into PiccoloClient (i.e. remove PiccoloChangeClient) so that if -c flag is present it does changes
         """
-        if not options.changenumber:
+        if not options.p2changenumber:
             raise APIError('piccolo changenumber missing on command line')
         
         #FIXME parse and then transform the diff
-        change_text = execute(["p", 'describe', '-s', 'full', options.changenumber])
+        change_text = execute(["p", 'describe', '-s', 'full', options.p2changenumber])
         change_text = change_text.split('\n')
         
         def piccolo_find_section_start(startcount, expected_marker, change_text):
@@ -2631,7 +2633,7 @@ class PiccoloClient(SCMClient):
         return (difftext, None)
     
     def diff(self, files):
-        if not options.changenumber:
+        if not options.p2changenumber:
             # Normal compare and diff
             return self._p_rcompare_diff(files)
         else:
@@ -3119,7 +3121,7 @@ def parse_options(args):
                       help='PICCOLO ONLY: file containing list of files in change, e.g. "p working | grep gwpr > list_of_files"')
     
     parser.add_option("-c", "--p2-changenumber",
-                      dest="changenumber", default=None,
+                      dest="p2changenumber", default=None,
                       help='PICCOLO ONLY: Piccolo (existing) change number, takes an existing change and posts for review')
     
     parser.add_option("--p2-server",
@@ -3294,6 +3296,8 @@ def main():
     ################################################################
     if isinstance(tool, PiccoloClient) and options.p2_guess_branch and options.branch is None:
         options.branch = tool.guess_branch(diff)
+        #print 'debug', 'options.branch', options.branch
+        #raise SystemExit()
     
     if isinstance(tool, PiccoloClient) and options.p2_guess_bugs and options.bugs_closed is None:
         options.bugs_closed= tool.guess_bugs(diff)
