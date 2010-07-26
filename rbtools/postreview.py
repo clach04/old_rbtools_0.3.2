@@ -2652,6 +2652,8 @@ class PiccoloClient(SCMClient):
         for ppath, pfilename, prev in compile_obj.findall(diff_str):
             if '!gateway!' in ppath:
                 mailgroups['ea'] = None
+            elif ppath.startswith('ingtest!gwts1000'):
+                mailgroups['ea'] = None
             else:
                 first_two_dirs=ppath.split('!', 2)[:2]
                 if first_two_dirs[0] == 'ingres':
@@ -2670,7 +2672,10 @@ class PiccoloClient(SCMClient):
         """
         tmp_line=diff_str.split(' ', 2)[1] # extract path of first file from piccolo diff header
         first_two_dirs=tmp_line.split('!', 2)[:2]
-        return '!'.join(first_two_dirs)
+        if first_two_dirs[0] == 'ingres':
+            return first_two_dirs[1]
+        else:
+            return '!'.join(first_two_dirs)
         
     def guess_bugs(self, diff_str):
         """naive guess piccolo bug(s)
