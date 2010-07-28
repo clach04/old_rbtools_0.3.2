@@ -2389,14 +2389,13 @@ SCMCLIENTS = (
 
 ####################################################################
 import logging
-DEBUG=True  ## FIXME debug remove!
+#DEBUG=True  ## FIXME debug remove!
 if DEBUG:
     LOG_FILENAME = '/tmp/logging_example.out'
     #logging.basicConfig(level=logging.DEBUG)
     #logging.basicConfig()
     #logging.basicConfig(filename=LOG_FILENAME, format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
     logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
-    #logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
 
 class PiccoloClient(SCMClient):
     """A wrapper around the p/p2 Piccolo tool that fetches repository information
