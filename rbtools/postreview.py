@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import string
+import datetime
 import urllib
 import urllib2
 from optparse import OptionParser
@@ -2388,11 +2389,14 @@ SCMCLIENTS = (
 
 ####################################################################
 import logging
+DEBUG=True  ## FIXME debug remove!
 if DEBUG:
     LOG_FILENAME = '/tmp/logging_example.out'
     #logging.basicConfig(level=logging.DEBUG)
     #logging.basicConfig()
-    logging.basicConfig(filename=LOG_FILENAME, format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+    #logging.basicConfig(filename=LOG_FILENAME, format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+    logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+    #logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
 
 class PiccoloClient(SCMClient):
     """A wrapper around the p/p2 Piccolo tool that fetches repository information
@@ -2462,17 +2466,43 @@ class PiccoloClient(SCMClient):
             if pver_text.startswith('Invalid option:'):
                 # too old, does not support -c
                 print ''
-                print 'Piccolo version too old, (version -c support missing). Need version %s' % self.p_minver_str
+                print 'Piccolo version too old, (version -c support missing). Need (at least) version %s' % self.p_minver_str
                 return None
             # extract version
             pver_text = pver_text.strip()
             pver_text = pver_text.rsplit(' ', 1)[1]
             pver = pver_text.rsplit('.')
-            pver = map(int, pver)
-            if pver < self.p_minver:
+            logging.debug("pver %r" % pver)
+            
+            #pver = map(int, pver)  # fails if ther are non-integers :-( E.g. 'Piccolo client version 2.2.0b14'
+            comparable_pver = []
+            for tmp_ver in pver:
+                try:
+                    tmp_ver = int(tmp_ver)
+                except ValueError:
+                    # probably not an integer, or may be a mix :-(
+                    new_tmp_ver = ['0']
+                    for tmp_ver_piece in tmp_ver:
+                        if tmp_ver_piece in string.digits:
+                            new_tmp_ver.append(tmp_ver_piece)
+                        else:
+                            break
+                    tmp_ver = int(''.join(new_tmp_ver))
+                comparable_pver.append(tmp_ver)
+            
+            logging.debug("comparable_pver %r" % comparable_pver)
+            logging.debug("self.p_minver %r" % self.p_minver)
+            if comparable_pver < self.p_minver:
                 print ''
                 print 'Piccolo version too old. Found version %s need version %s' % (pver_text, self.p_minver_str)
                 return None
+            
+            pic_command_str = 'p here'
+            self._p_here_txt = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
+            self._p_here_txt = self._p_here_txt.strip()
+        else:
+            self._p_here_txt = 'EDITME_P2_CLIENT_INFO'  ## TODO do at least minimum hostname and pwd?
+        logging.info('self._p_here_txt %r', self._p_here_txt)
         
         if options.submit_as is None:
             options.submit_as = os.environ.get('USER')
@@ -3309,6 +3339,78 @@ def main():
     
     if isinstance(tool, PiccoloClient) and options.p2_guess_group and options.target_groups is None:
         options.target_groups = tool.guess_group(diff)
+    
+    ## add template
+    if isinstance(tool, PiccoloClient) and options.rid is None and options.description is None:
+        options.description = '''For template help and more details see http://inspect.ingres.com/r/32/
+
+Targeted submission date
+
+    EDITME_DATE_TO_SUBMIT
+
+Private Path:
+
+    EDITME_P2_CLIENT_INFO
+
+Bug Release Notes
+
+    Format before submission with:
+        !}fmt -w 70  (or gq return in VIM)
+    See http://hasty/GW-info/GatewayReleaseNotes.htm
+
+    (GATEWAY, QA, DEVELOPMENT)
+    Bug release note in form of bug report, not fix report.
+    Bug numbers should not be re-used once a release has been
+    provided to either QA or a customer containing a fix for
+    the original bug number
+    (EDITME_BUGNUM)
+
+Related Service Desk Issues: EDITME 
+
+Related change numbers: EDITME 
+
+Propagation to Other code-lines:
+
+    Candidate for merging into EDITME_CODELINE(S) after submission into this codeline.
+
+Change Description:
+
+Format before submission with !}fmt -w 70  (or gq return in VIM)
+
+-----------------------------------------------------------
+EDITME_DESCRIPTION
+-----------------------------------------------------------
+
+New or removed Functions:
+
+    EDITME 
+
+CL Interface changes:
+
+    EDITME 
+
+Documentation Impact:
+
+    EDITME 
+
+Design and documentation Links:
+
+    EDITME 
+
+'''
+        one_day = datetime.timedelta(1)
+        submit_date = datetime.date.today() + 3*one_day
+        options.description = options.description.replace('EDITME_DATE_TO_SUBMIT', str(submit_date))
+        p2_client_info = tool._p_here_txt
+        options.description = options.description.replace('EDITME_P2_CLIENT_INFO', p2_client_info)
+        
+        ## TODO if guess bug number, could prefill in relnotes section too...
+        ## TODO if guess branch went well and was NOT 'main', could prefill in merge/cross integration section too...
+        
+        OS_USER_ENV = options.username or options.submit_as or os.environ.get('USER') or os.environ.get('USERNAME')
+        if OS_USER_ENV == 'clach04':
+            # clach04 special, save me some typing.....
+            options.description = options.description.replace(' EDITME ', ' None.')
     ################################################################
     
     if isinstance(tool, PerforceClient) and changenum is not None:
