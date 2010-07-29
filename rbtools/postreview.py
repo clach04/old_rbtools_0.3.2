@@ -2710,8 +2710,14 @@ class PiccoloClient(SCMClient):
         """naive guess piccolo bug(s)
         Uses the bug or sirs found in the (in the additions) diff text.
         Can either use first found or all (default)
+        Looks for bug or sir numbers on NEW (diff) lines, e.g.:
+        
+            > bug 123456    - MATCH
+            > bug123456     - MATCH
+            > b123456       - MATCH
+            < bug 356789    - do NOT match
         """
-        rawstr = r"""^>.*(SIR|BUG)\s*(?P<bug_or_sir>[0123456789]*)"""
+        rawstr = r"""^>.*(?:(?:SIR|BUG)\s*|b)(?P<bug_or_sir>[0123456789]*)"""
         compile_obj = re.compile(rawstr, re.IGNORECASE| re.MULTILINE)
         STOP_ON_FIRST=True
         STOP_ON_FIRST=False
