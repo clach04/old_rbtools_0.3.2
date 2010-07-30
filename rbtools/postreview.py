@@ -2717,13 +2717,15 @@ class PiccoloClient(SCMClient):
             > b123456       - MATCH
             < bug 356789    - do NOT match
         """
-        rawstr = r"""^>.*(?:(?:SIR|BUG)\s*|b)(?P<bug_or_sir>[0123456789]*)"""
+        rawstr = r"""^>.*((?:SIR|BUG)\s*|b)(?P<bug_or_sir>[0123456789]*)"""
         compile_obj = re.compile(rawstr, re.IGNORECASE| re.MULTILINE)
         STOP_ON_FIRST=True
         STOP_ON_FIRST=False
         bugs_and_sirs={}
         for change_type, bnum in compile_obj.findall(diff_str):
             #change_type = change_type.upper()
+            #if change_type == 'B':
+            #    change_type = 'BUG'
             try:
                 bnum = str(int(bnum))
             except ValueError:
