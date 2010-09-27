@@ -71,7 +71,7 @@ except ImportError:
                 version += ' %s %s' % (VERSION[3], VERSION[4])
 
         if not is_release():
-            version += " (dev)"
+            version += " (dev)"  # could add Ingres specific version stuff here (instead)
 
         return version
 
@@ -2422,6 +2422,7 @@ class PiccoloClient(SCMClient):
         self.p_minver = (2, 2, 9)
         self.p_minver = list(self.p_minver)
         self.p_minver_str = '.'.join(map(str,self.p_minver))
+        self.p_bin = options.p2_binary or 'p'
         """
         if options.debug:
             global DEBUG
@@ -2454,13 +2455,13 @@ class PiccoloClient(SCMClient):
             self._command_args = ['sh', '-c']
 
         if perform_piccolo_check:
-            if not check_install('p help'): # or "p here"? ideally 'p version -c' and then report issues with version (-c option was added to version 2.2.0 of piccolo; p2main.c -> 66 Change 2041 -> 66 (change) on 14-oct-2008 by whiro01)
+            if not check_install('%s help' % self.p_bin): # or "p here"? ideally 'p version -c' and then report issues with version (-c option was added to version 2.2.0 of piccolo; p2main.c -> 66 Change 2041 -> 66 (change) on 14-oct-2008 by whiro01)
                 # "p version -c" does not require current directory to be in MAPPATH (does not even need MAPPATH set)
                 # p help needs mappath (and connection to server)
                 return None
             # so we have a piccolo command in the path
             # check version of piccolo client .........
-            pic_command_str = 'p version -c'
+            pic_command_str = '%s version -c'  % self.p_bin
             pver_text = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
             logging.info('pver_text %r', pver_text)
             if pver_text.startswith('Invalid option:'):
@@ -2497,7 +2498,7 @@ class PiccoloClient(SCMClient):
                 print 'Piccolo version too old. Found version %s need version %s' % (pver_text, self.p_minver_str)
                 return None
             
-            pic_command_str = 'p here'
+            pic_command_str = '%s here' % self.p_bin
             self._p_here_txt = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
             self._p_here_txt = self._p_here_txt.strip()
         else:
@@ -2592,8 +2593,8 @@ class PiccoloClient(SCMClient):
                 working_params = ' '
             
             # use -s flag for server side diffs to ensure consistent "\ No newline at end of file" output (e.g. like gnu diff) if newlines are missing at EOF
-            pic_command_str = 'p working %s | p rcompare -s -l -' % working_params
-            pic_command_str = 'p working %s | p rcompare -l -' % working_params  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
+            pic_command_str = '%s working %s | %s rcompare -s -l -' % (self.p_bin, working_params, self.p_bin)
+            pic_command_str = '%s working %s | %s rcompare -l -' % (self.p_bin, working_params, self.p_bin)  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
             # be nice if piccolo rcompare supported a new param -working (or similar)
             
             diff_text=execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
@@ -2617,7 +2618,7 @@ class PiccoloClient(SCMClient):
             raise APIError('piccolo changenumber missing on command line')
         
         #FIXME parse and then transform the diff
-        change_text = execute(["p", 'describe', '-s', 'full', options.p2changenumber])
+        change_text = execute([self.p_bin, 'describe', '-s', 'full', options.p2changenumber])
         change_text = change_text.split('\n')
         
         def piccolo_find_section_start(startcount, expected_marker, change_text):
@@ -3183,6 +3184,10 @@ def parse_options(args):
                       action="store_false", dest="p2_guess_group", default=True,
                       help='PICCOLO ONLY: do NOT auto fill in group(s) based path of first file in diffs')
     
+    parser.add_option("--p2-binary",
+                      dest="p2_binary", default='p', # not sure if this should just be None
+                      help='PICCOLO ONLY: Piccolo executable/binary name.')
+    
     #############################################
     parser.add_option("--diff-filename",
                       dest="diff_filename", default=None,
@@ -3417,8 +3422,9 @@ Design and documentation Links:
         
         OS_USER_ENV = options.username or options.submit_as or os.environ.get('USER') or os.environ.get('USERNAME')
         if OS_USER_ENV == 'clach04':
-            # clach04 special, save me some typing.....
+            # clach04 special, save me some typing (being the maintainer has perks).....
             options.description = options.description.replace(' EDITME ', ' None.')
+            options.description = options.description.replace('    Candidate for merging into EDITME_CODELINE(S) after submission into this codeline.', '    Candidate for merging into EDITME_CODELINE(S) after submission into this codeline.\n    Not a for merging into other codeline(s).')
     ################################################################
     
     if isinstance(tool, PerforceClient) and changenum is not None:
