@@ -2432,10 +2432,12 @@ class PiccoloClient(SCMClient):
         
         if os.environ.get('DISABLE_POSTREVIEWPICCOLOCLIENT'):
             # User requested Piccolo support in postreview be disabled
+            logging.debug("piccolo explictly disabled")
             return None
         if options.p2changenumber or os.environ.get('ENABLE_POSTREVIEWPICCOLOCLIENT'):
             # User requested Piccolo support in postreview be enabled without check
             perform_piccolo_check=False
+            logging.debug("not going to perform piccolo check")
         else:
             logging.info('diff_filename %r', options.diff_filename)
             if options.diff_filename:
@@ -2454,10 +2456,13 @@ class PiccoloClient(SCMClient):
             # probably Unix like...
             self._command_args = ['sh', '-c']
 
+        logging.debug("piccolo bin %r" % self.p_bin)
         if perform_piccolo_check:
+            logging.debug("about to check for piccolo")
             if not check_install('%s help' % self.p_bin): # or "p here"? ideally 'p version -c' and then report issues with version (-c option was added to version 2.2.0 of piccolo; p2main.c -> 66 Change 2041 -> 66 (change) on 14-oct-2008 by whiro01)
                 # "p version -c" does not require current directory to be in MAPPATH (does not even need MAPPATH set)
                 # p help needs mappath (and connection to server)
+                logging.debug("piccolo check check_install() failed")
                 return None
             # so we have a piccolo command in the path
             # check version of piccolo client .........
@@ -2465,6 +2470,7 @@ class PiccoloClient(SCMClient):
             pver_text = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
             logging.info('pver_text %r', pver_text)
             if pver_text.startswith('Invalid option:'):
+                logging.debug("piccolo version check returned Invalid option")
                 # too old, does not support -c
                 print ''
                 print 'Piccolo version too old, (version -c support missing). Need (at least) version %s' % self.p_minver_str
@@ -2501,6 +2507,10 @@ class PiccoloClient(SCMClient):
             pic_command_str = '%s here' % self.p_bin
             self._p_here_txt = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
             self._p_here_txt = self._p_here_txt.strip()
+            
+            # FIXME look at check_gnu_diff() - don't actually need gnu diff under most unix systems BUT do under Windows (mostly likely place for a bad diff exe)
+            if sys.platform.startswith('win') or os_plat == 'nt':
+                check_gnu_diff()
         else:
             self._p_here_txt = 'EDITME_P2_CLIENT_INFO'  ## TODO do at least minimum hostname and pwd?
         logging.info('self._p_here_txt %r', self._p_here_txt)
@@ -2818,7 +2828,13 @@ def check_install(command):
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         return True
-    except OSError:
+    except OSError, oserror_info:
+        # DEBUG/FIXME, I've had an issue under Solaris with Jython where (sometimes) this would fail due to out of memory error (this is worth propagating/raising)
+        logging.debug("subprocess.Popen exception %r", (OSError, oserror_info))
+        """
+        if DEBUG:
+            raise
+        """
         return False
 
 
