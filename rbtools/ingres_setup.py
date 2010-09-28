@@ -54,7 +54,7 @@ setup(
     )
 
 zipfilename='distribute_me.zip'
-zipfilelist=['ingres_readme.txt', 'postreview.py', 'diff.exe'] + glob.glob('simplejson/*')+ glob.glob('dist/*')
+zipfilelist=['ingres_readme.txt', 'postreview.py', 'diff.exe', 'p.exe'] + glob.glob('simplejson/*')+ glob.glob('dist/*')
 
 import zipfile
 z = zipfile.ZipFile(zipfilename, 'w')
