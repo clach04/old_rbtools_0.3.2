@@ -736,6 +736,32 @@ class ReviewBoardServer(object):
 
         return content_type, content
 
+    #############################################
+    def add_comment(self, review_request, comment_text):
+        """
+        Adds a free-standing comment (i.e. review)
+        """
+        rid = review_request['id']
+
+        debug("Attempting to add comment for review request '%s':\n%s" %
+              (rid, comment_text))
+
+        self.api_post('api/json/reviewrequests/%s/reviews/draft/publish/' %
+                      rid,{ 'body_top': comment_text} )
+
+    def close_submitted(self, review_request) :
+        """
+        Close review as submitted
+        """
+        rid = review_request['id']
+
+        debug("Attempting to close review request '%s' as submitted" %
+              rid)
+
+        self.api_post('api/json/reviewrequests/%s/close/submitted/' %
+                      rid)
+    #############################################
+
 
 class SCMClient(object):
     """
@@ -2953,6 +2979,36 @@ def load_config_file(filename):
     return config
 
 
+def comment_or_close(server):
+    """
+    Add a comment and/or close as submitted
+    """
+    try:
+        review_request = server.get_review_request(options.rid)
+    except APIError, e:
+        die("Error getting review request %s: %s" % (options.rid, e))
+
+    try:
+        if options.comment:
+            server.add_comment(review_request, options.comment)
+
+        if options.close_submitted:
+            server.close_submitted(review_request)
+    except APIError, e:
+        die("Error updating review request %s: %s" % (options.rid, e))
+
+    request_url = 'r/' + str(review_request['id'])
+    review_url = urljoin(server.url, request_url)
+
+    if not review_url.startswith('http'):
+        review_url = 'http://%s' % review_url
+
+    print "Review request #%s updated." % (review_request['id'],)
+    print
+    print review_url
+
+    return review_url
+
 def tempt_fate(server, tool, changenum, diff_content=None,
                parent_diff_content=None, submit_as=None, retries=3):
     """
@@ -3203,7 +3259,16 @@ def parse_options(args):
     parser.add_option("--p2-binary",
                       dest="p2_binary", default='p', # not sure if this should just be None
                       help='PICCOLO ONLY: Piccolo executable/binary name.')
-    
+
+    parser.add_option("--add-comment",
+                      dest="comment", default=None,
+                      help="add a free-standing comment ")
+    parser.add_option("--add-comment-file",
+                      dest="comment_file", default=None,
+                      help="file containing test of a free-standing comment ")
+    parser.add_option("--close-submitted",
+                      dest="close_submitted",action="store_true",default=False,
+                      help="close review as submitted")
     #############################################
     parser.add_option("--diff-filename",
                       dest="diff_filename", default=None,
@@ -3211,6 +3276,73 @@ def parse_options(args):
                            'generating a new diff')
 
     (globals()["options"], args) = parser.parse_args(args)
+
+    if options.comment and options.comment_file:
+        sys.stderr.write("The --add-comment and --add-comment-file options"
+                         " are mutually exclusive.\n")
+        sys.exit(1)
+
+    if options.comment and options.rid is None:
+        sys.stderr.write("The --add-comment option is only valid for existing "
+                         "Review Requests.\n")
+        sys.exit(1)
+
+    if options.comment_file and options.rid is None:
+        sys.stderr.write("The --add-comment-file option is only valid for "
+                         "existing Review Requests.\n")
+        sys.exit(1)
+
+    # in order to avoid an empty "Review Request Changed" box don't allow
+    # add-comment, add-comment-file or close-submitted with any option that
+    # changes another field
+
+    if options.comment and (options.description or options.description_file\
+         or options.publish or options.output_diff_only or options.diff_only \
+         or options.target_groups or options.target_people or options.summary \
+         or options.guess_summary or options.guess_description or options.testing_done \
+         or options.testing_file or options.branch or options.bugs_closed \
+         or options.revision_range or options.label or options.submit_as \
+         or options.diff_filename ):
+        sys.stderr.write("The --add-comment option is only valid when not "
+                         "changing other fields in the Review Request.\n")
+        sys.exit(1)
+
+    if options.comment_file and (options.description or options.description_file\
+         or options.publish or options.output_diff_only or options.diff_only \
+         or options.target_groups or options.target_people or options.summary \
+         or options.guess_summary or options.guess_description or options.testing_done \
+         or options.testing_file or options.branch or options.bugs_closed \
+         or options.revision_range or options.label or options.submit_as \
+         or options.diff_filename ):
+        sys.stderr.write("The --add-comment-file option is only valid when not "
+                         "changing other fields in the Review Request.\n")
+        sys.exit(1)
+
+    if options.close_submitted and (options.description or options.description_file\
+         or options.publish or options.output_diff_only or options.diff_only \
+         or options.target_groups or options.target_people or options.summary \
+         or options.guess_summary or options.guess_description or options.testing_done \
+         or options.testing_file or options.branch or options.bugs_closed \
+         or options.revision_range or options.label or options.submit_as \
+         or options.diff_filename ):
+        sys.stderr.write("The --close-submitted option is only valid when not "
+                         "changing other fields in the Review Request.\n")
+        sys.exit(1)
+
+    if options.comment_file:
+        if os.path.exists(options.comment_file):
+            fp = open(options.comment_file, "r")
+            options.comment = fp.read()
+            fp.close()
+        else:
+            sys.stderr.write("The add-comment file %s does not exist.\n" %
+                             options.add_comment_file)
+            sys.exit(1)
+
+    if options.close_submitted and options.rid is None:
+        sys.stderr.write("The --close-submitted option is only valid for "
+                         "existing Review Requests.\n")
+        sys.exit(1)
 
     if options.description and options.description_file:
         sys.stderr.write("The --description and --description-file options "
@@ -3453,7 +3585,10 @@ Design and documentation Links:
     # Let's begin.
     server.login()
 
-    review_url = tempt_fate(server, tool, changenum, diff_content=diff,
+    if options.comment or options.close_submitted:
+       review_url = comment_or_close(server)
+    else:
+       review_url = tempt_fate(server, tool, changenum, diff_content=diff,
                             parent_diff_content=parent_diff,
                             submit_as=options.submit_as)
 
