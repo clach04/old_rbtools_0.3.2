@@ -3461,7 +3461,9 @@ def main():
     else:
         changenum = None
 
-    if options.revision_range:
+    if options.comment or options.close_submitted:
+        diff, parent_diff = None, None
+    elif options.revision_range:
         diff = tool.diff_between_revisions(options.revision_range, args,
                                            repository_info)
         parent_diff = None
@@ -3490,19 +3492,19 @@ def main():
         diff, parent_diff = tool.diff(args)
 
     ################################################################
-    if isinstance(tool, PiccoloClient) and options.p2_guess_branch and options.branch is None:
+    if diff and isinstance(tool, PiccoloClient) and options.p2_guess_branch and options.branch is None:
         options.branch = tool.guess_branch(diff)
         #print 'debug', 'options.branch', options.branch
         #raise SystemExit()
     
-    if isinstance(tool, PiccoloClient) and options.p2_guess_bugs and options.bugs_closed is None:
+    if diff and isinstance(tool, PiccoloClient) and options.p2_guess_bugs and options.bugs_closed is None:
         options.bugs_closed= tool.guess_bugs(diff)
     
-    if isinstance(tool, PiccoloClient) and options.p2_guess_group and options.target_groups is None:
+    if diff and isinstance(tool, PiccoloClient) and options.p2_guess_group and options.target_groups is None:
         options.target_groups = tool.guess_group(diff)
     
     ## add template
-    if isinstance(tool, PiccoloClient) and options.rid is None and options.description is None:
+    if diff and isinstance(tool, PiccoloClient) and options.rid is None and options.description is None:
         options.description = '''For template help and more details see http://inspect.ingres.com/r/32/
 
 Targeted submission date
