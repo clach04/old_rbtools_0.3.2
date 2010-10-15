@@ -3334,9 +3334,13 @@ def parse_options(args):
             fp = open(options.comment_file, "r")
             options.comment = fp.read()
             fp.close()
+            if not options.comment:
+               sys.stderr.write("The add-comment file %s is empty.\n" %
+                             options.comment_file)
+               sys.exit(1)
         else:
             sys.stderr.write("The add-comment file %s does not exist.\n" %
-                             options.add_comment_file)
+                             options.comment_file)
             sys.exit(1)
 
     if options.close_submitted and options.rid is None:
