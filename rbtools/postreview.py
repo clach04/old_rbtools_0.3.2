@@ -2417,12 +2417,14 @@ SCMCLIENTS = (
 ####################################################################
 import logging
 #DEBUG=True  ## FIXME debug remove!
-if DEBUG:
-    LOG_FILENAME = '/tmp/logging_example.out'
-    #logging.basicConfig(level=logging.DEBUG)
-    #logging.basicConfig()
-    #logging.basicConfig(filename=LOG_FILENAME, format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
-    logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+def my_setup_debug():
+    if DEBUG:
+        LOG_FILENAME = '/tmp/logging_example.out'
+        #logging.basicConfig(level=logging.DEBUG)
+        #logging.basicConfig()
+        #logging.basicConfig(filename=LOG_FILENAME, format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+        logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+my_setup_debug()
 
 class PiccoloClient(SCMClient):
     """A wrapper around the p/p2 Piccolo tool that fetches repository information
@@ -2445,14 +2447,16 @@ class PiccoloClient(SCMClient):
         "%APPDATA%"\.post-review-cookies.txt
     """
     def get_repository_info(self):
+        my_setup_debug()
         self.p_minver = (2, 2, 9)
         self.p_minver = list(self.p_minver)
         self.p_minver_str = '.'.join(map(str,self.p_minver))
         self.p_bin = options.p2_binary or 'p'
         """
+        # options.debug not populated yet
         if options.debug:
             global DEBUG
-            DEBUG           = True
+            DEBUG = True
             .....
         """
         
@@ -2754,8 +2758,14 @@ class PiccoloClient(SCMClient):
             > bug123456     - MATCH
             > b123456       - MATCH
             < bug 356789    - do NOT match
+            >     /* see CVLower above, Bug 108802 (move!) */ - MATCH
+            > **  18-Jan-2011 (clach04)
+            > **      Bug 124933, NULL dereference in DAfre_buffer()- MATCH
+            > **      Implemented NUL sanity check in DAfre_buffer()
+            > **      (copied from Oracle gateway).
+
         """
-        rawstr = r"""^>.*((?:SIR|BUG)\s*|b)(?P<bug_or_sir>[0123456789]*)"""
+        rawstr = r"""^>.*(?P<bug_or_sir>(?:SIR\s*|BUG\s*|b))(?P<bug_or_sir_num>\d*)\W"""
         compile_obj = re.compile(rawstr, re.IGNORECASE| re.MULTILINE)
         STOP_ON_FIRST=True
         STOP_ON_FIRST=False
@@ -2776,6 +2786,7 @@ class PiccoloClient(SCMClient):
         bugs_and_sirs_list=list(bugs_and_sirs.keys())
         bugs_and_sirs_list.sort()
         result = ','.join(bugs_and_sirs_list)
+        logging.debug("guess bugs: %r" % result)
         return result
     
     def add_options(self, parser):
@@ -3502,7 +3513,7 @@ def main():
         #raise SystemExit()
     
     if diff and isinstance(tool, PiccoloClient) and options.p2_guess_bugs and options.bugs_closed is None:
-        options.bugs_closed= tool.guess_bugs(diff)
+        options.bugs_closed = tool.guess_bugs(diff)
     
     if diff and isinstance(tool, PiccoloClient) and options.p2_guess_group and options.target_groups is None:
         options.target_groups = tool.guess_group(diff)
