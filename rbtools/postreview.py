@@ -55,7 +55,7 @@ except ImportError:
     #   (Major, Minor, Micro, alpha/beta/rc/final, Release Number, Released)
     #
     VERSION = (0, 2, 1, 'alpha', 0, False)  # what I originally started with
-    VERSION = (0, 2, 1, 'Ingres_0.6', 0, False)  # Custom Ingres version
+    VERSION = (0, 2, 1, 'Ingres', 7, True)  # Custom Ingres version;
 
 
     def get_version_string():
@@ -2449,6 +2449,7 @@ class PiccoloClient(SCMClient):
     def get_repository_info(self):
         my_setup_debug()
         self.p_minver = (2, 2, 9)
+        self.p_minver = (2, 3, 5)  # adds the '-i' flag to rcomapre integrated files as needed for review.
         self.p_minver = list(self.p_minver)
         self.p_minver_str = '.'.join(map(str,self.p_minver))
         self.p_bin = options.p2_binary or 'p'
@@ -2596,7 +2597,8 @@ class PiccoloClient(SCMClient):
             Step 1 - get diff:
                 ## cd $ING_SRC
                 ## cd %ING_SRC%
-                p working | p rcompare -l - > example_pic.diff
+                ## NOTE -i  flag requires piccolo 2.3.5
+                p working | p rcompare -i -l - > example_pic.diff
                 
             Step 2 - post review
                 jython post-review  --p2-diff-filename example_pic.diff --server=http://reviewboard.ingres.prv
@@ -2621,9 +2623,9 @@ class PiccoloClient(SCMClient):
             """
             if options.piccolo_flist:
                 options.piccolo_flist = os.path.abspath(options.piccolo_flist)
-                pic_command_str = "p working -l %s | p rcompare -l -" % options.piccolo_flist # TODO do we need to escape the filepath?
+                pic_command_str = "p working -l %s | p rcompare -i -l -" % options.piccolo_flist # TODO do we need to escape the filepath?
             else:
-                pic_command_str = "p working | p rcompare -l -"
+                pic_command_str = "p working | p rcompare -i -l -"
                 # be nice if piccolo rcompare supported a new param -working (or similar)
             """
             if options.piccolo_flist:
@@ -2633,8 +2635,8 @@ class PiccoloClient(SCMClient):
                 working_params = ' '
             
             # use -s flag for server side diffs to ensure consistent "\ No newline at end of file" output (e.g. like gnu diff) if newlines are missing at EOF
-            pic_command_str = '%s working %s | %s rcompare -s -l -' % (self.p_bin, working_params, self.p_bin)
-            pic_command_str = '%s working %s | %s rcompare -l -' % (self.p_bin, working_params, self.p_bin)  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
+            pic_command_str = '%s working %s | %s rcompare -i -s -l -' % (self.p_bin, working_params, self.p_bin)
+            pic_command_str = '%s working %s | %s rcompare -i -l -' % (self.p_bin, working_params, self.p_bin)  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
             # be nice if piccolo rcompare supported a new param -working (or similar)
             
             diff_text=execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
