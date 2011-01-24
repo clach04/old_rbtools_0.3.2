@@ -55,7 +55,7 @@ except ImportError:
     #   (Major, Minor, Micro, alpha/beta/rc/final, Release Number, Released)
     #
     VERSION = (0, 2, 1, 'alpha', 0, False)  # what I originally started with
-    VERSION = (0, 2, 1, 'Ingres', 7, True)  # Custom Ingres version;
+    VERSION = (0, 2, 1, 'Ingres', 8, False)  # Custom Ingres version;
 
 
     def get_version_string():
