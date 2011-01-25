@@ -2639,7 +2639,8 @@ class PiccoloClient(SCMClient):
             pic_command_str = '%s working %s | %s rcompare -i -l -' % (self.p_bin, working_params, self.p_bin)  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
             # be nice if piccolo rcompare supported a new param -working (or similar)
             
-            diff_text=execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
+            diff_text=execute(self._command_args + [pic_command_str], extra_ignore_errors=(1,))
+            # Could add extra sanity check; for decent looking output, e.g. starts with '==='
         return (diff_text, None)
     
     def _p_describe_diff(self, files):
