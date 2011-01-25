@@ -2448,8 +2448,9 @@ class PiccoloClient(SCMClient):
     """
     def get_repository_info(self):
         my_setup_debug()
+        self.p_actualver = os.environ.get('FORCE_PICCOLO_VERSION')
         self.p_minver = (2, 2, 9)
-        self.p_minver = (2, 3, 5)  # adds the '-i' flag to rcomapre integrated files as needed for review.
+        self.p_minver = (2, 3, 5)  # adds the '-i' flag to rcompare integrated files as needed for review.
         self.p_minver = list(self.p_minver)
         self.p_minver_str = '.'.join(map(str,self.p_minver))
         self.p_bin = options.p2_binary or 'p'
@@ -2465,7 +2466,9 @@ class PiccoloClient(SCMClient):
             # User requested Piccolo support in postreview be disabled
             logging.debug("piccolo explictly disabled")
             return None
-        if options.p2changenumber or os.environ.get('ENABLE_POSTREVIEWPICCOLOCLIENT'):
+        if self.p_actualver:
+            self.p_actualver = map(int, self.p_actualver.split('.'))
+        if options.p2changenumber or self.p_actualver or os.environ.get('ENABLE_POSTREVIEWPICCOLOCLIENT'):
             # User requested Piccolo support in postreview be enabled without check
             perform_piccolo_check=False
             logging.debug("not going to perform piccolo check")
@@ -2528,9 +2531,10 @@ class PiccoloClient(SCMClient):
                     tmp_ver = int(''.join(new_tmp_ver))
                 comparable_pver.append(tmp_ver)
             
-            logging.debug("comparable_pver %r" % comparable_pver)
+            self.p_actualver = comparable_pver
+            logging.debug("self.p_actualver %r" % self.p_actualver)
             logging.debug("self.p_minver %r" % self.p_minver)
-            if comparable_pver < self.p_minver:
+            if self.p_actualver < self.p_minver:
                 print ''
                 print 'Piccolo version too old. Found version %s need version %s' % (pver_text, self.p_minver_str)
                 return None
@@ -2634,9 +2638,15 @@ class PiccoloClient(SCMClient):
             else:
                 working_params = ' '
             
-            # use -s flag for server side diffs to ensure consistent "\ No newline at end of file" output (e.g. like gnu diff) if newlines are missing at EOF
-            pic_command_str = '%s working %s | %s rcompare -i -s -l -' % (self.p_bin, working_params, self.p_bin)
-            pic_command_str = '%s working %s | %s rcompare -i -l -' % (self.p_bin, working_params, self.p_bin)  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
+            logging.debug("pre rcompare; self.p_actualver %r" % self.p_actualver)
+            #import pdb ; pdb.set_trace()
+            if self.p_actualver < [2, 3, 5]:
+                pflag_sane_integration_diffs = ''
+            else:
+                pflag_sane_integration_diffs = '-i'
+            # use -s flag for server side diffs to ensure consistent "\ No newline at end of file" output (e.g. like gnu diff) if newlines are missing at EOF. NOTE server side diffs fail for new reserved files :-(
+            pic_command_str = '%s working %s | %s rcompare %s -s -l -' % (self.p_bin, working_params, self.p_bin, pflag_sane_integration_diffs)
+            pic_command_str = '%s working %s | %s rcompare %s -l -' % (self.p_bin, working_params, self.p_bin, pflag_sane_integration_diffs)  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
             # be nice if piccolo rcompare supported a new param -working (or similar)
             
             diff_text=execute(self._command_args + [pic_command_str], extra_ignore_errors=(1,))
