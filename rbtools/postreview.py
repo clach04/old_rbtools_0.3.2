@@ -2468,7 +2468,7 @@ class PiccoloClient(SCMClient):
             return None
         if self.p_actualver:
             self.p_actualver = map(int, self.p_actualver.split('.'))
-        if options.p2changenumber or self.p_actualver or os.environ.get('ENABLE_POSTREVIEWPICCOLOCLIENT'):
+        if options.p2changenumber or os.environ.get('ENABLE_POSTREVIEWPICCOLOCLIENT'):
             # User requested Piccolo support in postreview be enabled without check
             perform_piccolo_check=False
             logging.debug("not going to perform piccolo check")
@@ -2499,45 +2499,46 @@ class PiccoloClient(SCMClient):
                 logging.debug("piccolo check check_install() failed")
                 return None
             # so we have a piccolo command in the path
-            # check version of piccolo client .........
-            pic_command_str = '%s version -c'  % self.p_bin
-            pver_text = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
-            logging.info('pver_text %r', pver_text)
-            if pver_text.startswith('Invalid option:'):
-                logging.debug("piccolo version check returned Invalid option")
-                # too old, does not support -c
-                print ''
-                print 'Piccolo version too old, (version -c support missing). Need (at least) version %s' % self.p_minver_str
-                return None
-            # extract version
-            pver_text = pver_text.strip()
-            pver_text = pver_text.rsplit(' ', 1)[1]
-            pver = pver_text.rsplit('.')
-            logging.debug("pver %r" % pver)
-            
-            #pver = map(int, pver)  # fails if ther are non-integers :-( E.g. 'Piccolo client version 2.2.0b14'
-            comparable_pver = []
-            for tmp_ver in pver:
-                try:
-                    tmp_ver = int(tmp_ver)
-                except ValueError:
-                    # probably not an integer, or may be a mix :-(
-                    new_tmp_ver = ['0']
-                    for tmp_ver_piece in tmp_ver:
-                        if tmp_ver_piece in string.digits:
-                            new_tmp_ver.append(tmp_ver_piece)
-                        else:
-                            break
-                    tmp_ver = int(''.join(new_tmp_ver))
-                comparable_pver.append(tmp_ver)
-            
-            self.p_actualver = comparable_pver
-            logging.debug("self.p_actualver %r" % self.p_actualver)
-            logging.debug("self.p_minver %r" % self.p_minver)
-            if self.p_actualver < self.p_minver:
-                print ''
-                print 'Piccolo version too old. Found version %s need version %s' % (pver_text, self.p_minver_str)
-                return None
+            if not self.p_actualver:
+                # check version of piccolo client .........
+                pic_command_str = '%s version -c'  % self.p_bin
+                pver_text = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
+                logging.info('pver_text %r', pver_text)
+                if pver_text.startswith('Invalid option:'):
+                    logging.debug("piccolo version check returned Invalid option")
+                    # too old, does not support -c
+                    print ''
+                    print 'Piccolo version too old, (version -c support missing). Need (at least) version %s' % self.p_minver_str
+                    return None
+                # extract version
+                pver_text = pver_text.strip()
+                pver_text = pver_text.rsplit(' ', 1)[1]
+                pver = pver_text.rsplit('.')
+                logging.debug("pver %r" % pver)
+                
+                #pver = map(int, pver)  # fails if ther are non-integers :-( E.g. 'Piccolo client version 2.2.0b14'
+                comparable_pver = []
+                for tmp_ver in pver:
+                    try:
+                        tmp_ver = int(tmp_ver)
+                    except ValueError:
+                        # probably not an integer, or may be a mix :-(
+                        new_tmp_ver = ['0']
+                        for tmp_ver_piece in tmp_ver:
+                            if tmp_ver_piece in string.digits:
+                                new_tmp_ver.append(tmp_ver_piece)
+                            else:
+                                break
+                        tmp_ver = int(''.join(new_tmp_ver))
+                    comparable_pver.append(tmp_ver)
+                
+                self.p_actualver = comparable_pver
+                logging.debug("self.p_actualver %r" % self.p_actualver)
+                logging.debug("self.p_minver %r" % self.p_minver)
+                if self.p_actualver < self.p_minver:
+                    print ''
+                    print 'Piccolo version too old. Found version %s need version %s' % (pver_text, self.p_minver_str)
+                    return None
             
             pic_command_str = '%s here' % self.p_bin
             self._p_here_txt = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
