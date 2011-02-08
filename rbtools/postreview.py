@@ -2416,7 +2416,7 @@ SCMCLIENTS = (
 
 ####################################################################
 import logging
-#DEBUG=True  ## FIXME debug remove!
+#DEBUG = True  ## FIXME debug remove!
 def my_setup_debug():
     if DEBUG:
         LOG_FILENAME = '/tmp/logging_example.out'
@@ -2613,11 +2613,6 @@ class PiccoloClient(SCMClient):
             diffbytes=open(options.diff_filename, 'r').read() ## TODO consider strings instead of bytes? NOTE not using binary as we want to avoid \r values.... This may need further work, this is mostly for win32
             diff_text=diffbytes
         else:
-            files_list = files
-            if not files_list and options.piccolo_flist:
-                filteptr = open(options.piccolo_flist)
-                files_list = filteptr.readlines()
-            logging.info('CMC files_list %r', files_list)
             if options.piccolo_flist:
                 if options.piccolo_flist.strip() == '-':
                     print 'WARNING piccolo - param to -l not supported (yet?), ignoring and assuming all (working) files'
@@ -2637,7 +2632,12 @@ class PiccoloClient(SCMClient):
                 options.piccolo_flist = os.path.abspath(options.piccolo_flist)
                 working_params = '-l %s ' % options.piccolo_flist # TODO do we need to escape the filepath?
             else:
-                working_params = ' '
+                if files:
+                    # Just the names specified on command line (and in current directory as Piccolo paths do not match native paths)
+                    working_params = ' '.join(files)
+                else:
+                    # Any open/reserved file will be diff'd
+                    working_params = ' '
             
             logging.debug("pre rcompare; self.p_actualver %r" % self.p_actualver)
             #import pdb ; pdb.set_trace()
@@ -3603,7 +3603,8 @@ Design and documentation Links:
         if OS_USER_ENV == 'clach04':
             # clach04 special, save me some typing (being the maintainer has perks).....
             options.description = options.description.replace(' EDITME ', ' None.')
-            options.description = options.description.replace('    Candidate for merging into EDITME_CODELINE(S) after submission into this codeline.', '    Candidate for merging into EDITME_CODELINE(S) after submission into this codeline.\n    Not a for merging into other codeline(s).')
+            options.description = options.description.replace('    (EDITME_BUGNUM)', '    (EDITME_BUGNUM)\n    None')
+            options.description = options.description.replace('    Candidate for merging into EDITME_CODELINE(S) after submission into this codeline.', '    Candidate for merging into EDITME_CODELINE(S) after submission into this codeline.\n    Not a Candidate for merging into other codeline(s).')
     ################################################################
     
     if isinstance(tool, PerforceClient) and changenum is not None:
