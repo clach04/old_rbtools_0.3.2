@@ -13,6 +13,7 @@ Zero error checking.
 TODO inject 'py2exe' into sys.argv?
 """
 import os
+import sys
 import glob
 import shutil
 
@@ -31,6 +32,10 @@ try:
 except WindowsError, info:
     # assume directory does not exist
     pass
+
+if len(sys.argv) == 1:
+    print 'defaulting to creating py2exe'
+    sys.argv += ['py2exe']
 
 # disable optimization- we _may_ need docs strings, specifically "copyright"
 setup(
