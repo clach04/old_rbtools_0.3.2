@@ -12,6 +12,8 @@ import stat
 import subprocess
 import sys
 import tempfile
+import string
+import datetime
 import urllib
 import urllib2
 from optparse import OptionParser
@@ -40,7 +42,58 @@ if (sys.platform.startswith('win')
 else:
     import posixpath as cpath
 
-from rbtools import get_package_version, get_version_string
+try:
+    from rbtools import get_package_version, get_version_string
+except ImportError:
+    # probably a custom version of our single file post review tool
+    # fake out requirements (copy and paste of a version of rbtools/__init__.py
+    #VERSION = "0.8"
+    #VERSION = VERSION + '.Ingres.0.5'
+
+    
+    # The version of RBTools
+    #
+    # This is in the format of:
+    #
+    #   (Major, Minor, Micro, alpha/beta/rc/final, Release Number, Released)
+    #
+    VERSION = (0, 2, 1, 'alpha', 0, False)  # what I originally started with
+    VERSION = (0, 2, 1, 'Ingres', 8, False)  # Custom Ingres version;
+
+
+    def get_version_string():
+        version = '%s.%s' % (VERSION[0], VERSION[1])
+
+        if VERSION[2]:
+            version += ".%s" % VERSION[2]
+
+        if VERSION[3] != 'final':
+            if VERSION[3] == 'rc':
+                version += ' RC%s' % VERSION[4]
+            else:
+                version += ' %s %s' % (VERSION[3], VERSION[4])
+
+        if not is_release():
+            version += " (dev)"  # could add Ingres specific version stuff here (instead)
+
+        return version
+
+
+    def get_package_version():
+        version = '%s.%s' % (VERSION[0], VERSION[1])
+
+        if VERSION[2]:
+            version += ".%s" % VERSION[2]
+
+        if VERSION[3] != 'final':
+            version += '%s%s' % (VERSION[3], VERSION[4])
+
+        return version
+
+
+    def is_release():
+        return VERSION[5]
+
 
 
 ###
@@ -94,6 +147,7 @@ from rbtools import get_package_version, get_version_string
 #   REVIEWBOARD_URL = "http://reviewboard.example.com"
 #
 REVIEWBOARD_URL = None
+#REVIEWBOARD_URL = 'http://reviewboard.ingres.prv'
 
 # Default submission arguments.  These are all optional; run this
 # script with --help for descriptions of each argument.
@@ -105,6 +159,7 @@ OPEN_BROWSER    = False
 
 # Debugging.  For development...
 DEBUG           = False
+#DEBUG           = True
 
 ###
 # End user-settable variables.
@@ -1031,6 +1086,32 @@ class ReviewBoardServer(object):
         content_type = "multipart/form-data; boundary=%s" % BOUNDARY
 
         return content_type, content
+
+    #############################################
+    def add_comment(self, review_request, comment_text):
+        """
+        Adds a free-standing comment (i.e. review)
+        """
+        rid = review_request['id']
+
+        debug("Attempting to add comment for review request '%s':\n%s" %
+              (rid, comment_text))
+
+        self.api_post('api/json/reviewrequests/%s/reviews/draft/publish/' %
+                      rid,{ 'body_top': comment_text} )
+
+    def close_submitted(self, review_request) :
+        """
+        Close review as submitted
+        """
+        rid = review_request['id']
+
+        debug("Attempting to close review request '%s' as submitted" %
+              rid)
+
+        self.api_post('api/json/reviewrequests/%s/close/submitted/' %
+                      rid)
+    #############################################
 
 
 class SCMClient(object):
@@ -3237,12 +3318,445 @@ SCMCLIENTS = (
     PlasticClient(),
 )
 
+####################################################################
+import logging
+#DEBUG = True  ## FIXME debug remove!
+def my_setup_debug():
+    if DEBUG:
+        LOG_FILENAME = '/tmp/logging_example.out'
+        #logging.basicConfig(level=logging.DEBUG)
+        #logging.basicConfig()
+        #logging.basicConfig(filename=LOG_FILENAME, format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+        logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+my_setup_debug()
+
+class PiccoloClient(SCMClient):
+    """A wrapper around the p/p2 Piccolo tool that fetches repository information
+    and generates compatible diffs.
+    
+    Recommended piccolo client version is 2.2.9.
+    
+    Set environment variables:
+        DISABLE_POSTREVIEWPICCOLOCLIENT - to disable piccolo support in postreview
+        ENABLE_POSTREVIEWPICCOLOCLIENT  - to force the use of the piccolo command line
+
+    
+    NOTE does not yet handle branches! Integrates are sort of handled based on "p working" output used as input to rcompare - review/change looks like a regulr change though.
+    
+    TODO set REVIEWBOARD_URL/config['REVIEWBOARD_URL'] if not set?
+    TODO guess summary/description based on first set of comments?
+    TODO for existing changenumber fill in bug number(s)
+    will set options.username/options.submit_as if not set, based on USER operating system variable (required by piccolo, so probably already set)
+    
+        "%APPDATA%"\.post-review-cookies.txt
+    """
+    def get_repository_info(self):
+        my_setup_debug()
+        self.p_actualver = os.environ.get('FORCE_PICCOLO_VERSION')
+        self.p_minver = (2, 2, 9)
+        self.p_minver = (2, 3, 5)  # adds the '-i' flag to rcompare integrated files as needed for review.
+        self.p_minver = list(self.p_minver)
+        self.p_minver_str = '.'.join(map(str,self.p_minver))
+        self.p_bin = options.p2_binary or 'p'
+        """
+        # options.debug not populated yet
+        if options.debug:
+            global DEBUG
+            DEBUG = True
+            .....
+        """
+        
+        if os.environ.get('DISABLE_POSTREVIEWPICCOLOCLIENT'):
+            # User requested Piccolo support in postreview be disabled
+            logging.debug("piccolo explictly disabled")
+            return None
+        if self.p_actualver:
+            self.p_actualver = map(int, self.p_actualver.split('.'))
+        if options.p2changenumber or os.environ.get('ENABLE_POSTREVIEWPICCOLOCLIENT'):
+            # User requested Piccolo support in postreview be enabled without check
+            perform_piccolo_check=False
+            logging.debug("not going to perform piccolo check")
+        else:
+            logging.info('diff_filename %r', options.diff_filename)
+            if options.diff_filename:
+                perform_piccolo_check=False
+            else:
+                perform_piccolo_check=True
+            
+        try:
+            # Jython only test, consider using a robust check platform module, http://downloads.egenix.com/python/platform.py I think there are others
+            os_plat=os.get_os_type()
+        except AttributeError:
+            os_plat=''
+        if sys.platform.startswith('win') or os_plat == 'nt':
+            self._command_args = ['cmd', '/C']
+        else:
+            # probably Unix like...
+            self._command_args = ['sh', '-c']
+
+        logging.debug("piccolo bin %r" % self.p_bin)
+        if perform_piccolo_check:
+            logging.debug("about to check for piccolo")
+            if not check_install('%s help' % self.p_bin): # or "p here"? ideally 'p version -c' and then report issues with version (-c option was added to version 2.2.0 of piccolo; p2main.c -> 66 Change 2041 -> 66 (change) on 14-oct-2008 by whiro01)
+                # "p version -c" does not require current directory to be in MAPPATH (does not even need MAPPATH set)
+                # p help needs mappath (and connection to server)
+                logging.debug("piccolo check check_install() failed")
+                return None
+            # so we have a piccolo command in the path
+            if not self.p_actualver:
+                # check version of piccolo client .........
+                pic_command_str = '%s version -c'  % self.p_bin
+                pver_text = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
+                logging.info('pver_text %r', pver_text)
+                if pver_text.startswith('Invalid option:'):
+                    logging.debug("piccolo version check returned Invalid option")
+                    # too old, does not support -c
+                    print ''
+                    print 'Piccolo version too old, (version -c support missing). Need (at least) version %s' % self.p_minver_str
+                    return None
+                # extract version
+                pver_text = pver_text.strip()
+                pver_text = pver_text.rsplit(' ', 1)[1]
+                pver = pver_text.rsplit('.')
+                logging.debug("pver %r" % pver)
+                
+                #pver = map(int, pver)  # fails if ther are non-integers :-( E.g. 'Piccolo client version 2.2.0b14'
+                comparable_pver = []
+                for tmp_ver in pver:
+                    try:
+                        tmp_ver = int(tmp_ver)
+                    except ValueError:
+                        # probably not an integer, or may be a mix :-(
+                        new_tmp_ver = ['0']
+                        for tmp_ver_piece in tmp_ver:
+                            if tmp_ver_piece in string.digits:
+                                new_tmp_ver.append(tmp_ver_piece)
+                            else:
+                                break
+                        tmp_ver = int(''.join(new_tmp_ver))
+                    comparable_pver.append(tmp_ver)
+                
+                self.p_actualver = comparable_pver
+                logging.debug("self.p_actualver %r" % self.p_actualver)
+                logging.debug("self.p_minver %r" % self.p_minver)
+                if self.p_actualver < self.p_minver:
+                    print ''
+                    print 'Piccolo version too old. Found version %s need version %s' % (pver_text, self.p_minver_str)
+                    return None
+            
+            pic_command_str = '%s here' % self.p_bin
+            self._p_here_txt = execute(self._command_args + [pic_command_str], ignore_errors=True, extra_ignore_errors=(1,))
+            self._p_here_txt = self._p_here_txt.strip()
+            
+            # FIXME look at check_gnu_diff() - don't actually need gnu diff under most unix systems BUT do under Windows (mostly likely place for a bad diff exe)
+            if sys.platform.startswith('win') or os_plat == 'nt':
+                check_gnu_diff()
+        else:
+            self._p_here_txt = 'EDITME_P2_CLIENT_INFO'  ## TODO do at least minimum hostname and pwd?
+        logging.info('self._p_here_txt %r', self._p_here_txt)
+        
+        if options.submit_as is None:
+            options.submit_as = os.environ.get('USER')
+            if options.submit_as and options.submit_as.lower() == 'ingres':
+                options.submit_as = None
+        
+        #if options.username is None:
+        #    options.username = os.environ.get('USER')
+        
+        # Ingres Corp only has 1 repository (although there are gateways)
+        """
+        The Piccolo server (or path) can be obtained with NEWer clients in a very easy fashion:
+        
+        version 2.2.0 has a neat option:
+        
+            p map -x
+        
+        version 2.1.24 does NOT support -x (which restricts to things you have mapped, i.e. can limit the connects) but does support map:
+        
+            p map
+        
+        NOTE check version requires Rogers changes.
+        
+        Can then grep for connect, etc.
+        """
+        default_piccolo_server = 'usilsuxx:1666'  # and/or pick up from "p map" filtering for connect(s) (shell approach would be; p map |grep '^connect' | awk '{print $4}') if perform_piccolo_check is True
+        repository_path = options.p2_server or default_piccolo_server # Should try and pick this up from client map, really need a new piccolo command list (first) piccolo server
+        
+        if options.server is None:
+            options.server = 'http://reviewboard.ingres.prv'  # should consider overridding _get_server_from_config()
+        
+        return RepositoryInfo(path=repository_path, supports_changesets=False)
+        
+    def _p_rcompare_diff(self, files):
+        """Performs a diff across all modified files in a Piccolo client repository
+        or only a diff against specified files.
+        
+        TODO add check for piccolo version and warn user if old
+        NOTE recommended minimum version of piccolo client is 2.2.9; for auto delete file on "reserve -d " improvement
+        NOTE recommended minimum version of piccolo client is 2.2.4; massive performance benefits under Windows with this release
+        NOTE recommended absolute minimum version of piccolo client is 2.2.1alpha; (for binary and deleted file improvements on diffs/rcompare)
+        NOTE recommended minimum version of piccolo client is 2.2.0; for -c option to "p version"
+        """
+        logging.info('CMC files %r', files)
+        logging.info('CMC options.piccolo_flist %r', options.piccolo_flist)
+        logging.info('CMC options.diff_filename %r', options.diff_filename)
+        if options.diff_filename:
+            """Example:
+            
+            Step 1 - get diff:
+                ## cd $ING_SRC
+                ## cd %ING_SRC%
+                ## NOTE -i  flag requires piccolo 2.3.5
+                p working | p rcompare -i -l - > example_pic.diff
+                
+            Step 2 - post review
+                jython post-review  --p2-diff-filename example_pic.diff --server=http://reviewboard.ingres.prv
+
+                post-review  --server=http://reviewboard.ingres.prv --summary="This is a post-review test by hanal04" --description="Checking current automatic field entry from the command line." --bugs-closed="123456, 98734" --target-groups="admin grp" --target-people="clach04" --submit-as="hanal04 -r 999999"
+            """
+            diffbytes=open(options.diff_filename, 'r').read() ## TODO consider strings instead of bytes? NOTE not using binary as we want to avoid \r values.... This may need further work, this is mostly for win32
+            diff_text=diffbytes
+        else:
+            if options.piccolo_flist:
+                if options.piccolo_flist.strip() == '-':
+                    print 'WARNING piccolo - param to -l not supported (yet?), ignoring and assuming all (working) files'
+                    options.piccolo_flist = None
+            
+            # Set piccolo command line command
+            # TODO do we need to redirect and capture stderr? "2>&1".
+            """
+            if options.piccolo_flist:
+                options.piccolo_flist = os.path.abspath(options.piccolo_flist)
+                pic_command_str = "p working -l %s | p rcompare -i -l -" % options.piccolo_flist # TODO do we need to escape the filepath?
+            else:
+                pic_command_str = "p working | p rcompare -i -l -"
+                # be nice if piccolo rcompare supported a new param -working (or similar)
+            """
+            if options.piccolo_flist:
+                options.piccolo_flist = os.path.abspath(options.piccolo_flist)
+                working_params = '-l %s ' % options.piccolo_flist # TODO do we need to escape the filepath?
+            else:
+                if files:
+                    # Just the names specified on command line (and in current directory as Piccolo paths do not match native paths)
+                    working_params = ' '.join(files)
+                else:
+                    # Any open/reserved file will be diff'd
+                    working_params = ' '
+            
+            logging.debug("pre rcompare; self.p_actualver %r" % self.p_actualver)
+            #import pdb ; pdb.set_trace()
+            if self.p_actualver < [2, 3, 5]:
+                pflag_sane_integration_diffs = ''
+            else:
+                pflag_sane_integration_diffs = '-i'
+            # use -s flag for server side diffs to ensure consistent "\ No newline at end of file" output (e.g. like gnu diff) if newlines are missing at EOF. NOTE server side diffs fail for new reserved files :-(
+            pic_command_str = '%s working %s | %s rcompare %s -s -l -' % (self.p_bin, working_params, self.p_bin, pflag_sane_integration_diffs)
+            pic_command_str = '%s working %s | %s rcompare %s -l -' % (self.p_bin, working_params, self.p_bin, pflag_sane_integration_diffs)  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
+            # be nice if piccolo rcompare supported a new param -working (or similar)
+            
+            diff_text=execute(self._command_args + [pic_command_str], extra_ignore_errors=(1,))
+            # Could add extra sanity check; for decent looking output, e.g. starts with '==='
+        return (diff_text, None)
+    
+    def _p_describe_diff(self, files):
+        """Extracts diff from existing (already submitted) piccolo change"""
+        """A wrapper around the p/p2 Piccolo tool that ONLY submits reviews of existing changes
+        This could be made part of PiccoloChangeClient() but this is at the moment only for testing
+        (i..e use existing changes for demo/test data).
+        
+        Suggested usage:
+        
+        Unix
+            env DISABLE_POSTREVIEWPICCOLOCLIENT=true python /export/home/ingres/clach04/scripts/rb_post.py --server=http://clach04-745.ingres.prv:8000 -c 493916
+
+        
+        TODO merge into PiccoloClient (i.e. remove PiccoloChangeClient) so that if -c flag is present it does changes
+        """
+        if not options.p2changenumber:
+            raise APIError('piccolo changenumber missing on command line')
+        
+        #FIXME parse and then transform the diff
+        change_text = execute([self.p_bin, 'describe', '-s', 'full', options.p2changenumber])
+        change_text = change_text.split('\n')
+        
+        def piccolo_find_section_start(startcount, expected_marker, change_text):
+            """
+            startcount integer starting point
+            expected_marker string expected start text
+            change_text = list of lines
+            
+            returns line startnumber
+            """
+            linecount = startcount
+            line = ''
+            while line != expected_marker:
+                linecount += 1
+                line = change_text[linecount]
+            return linecount        
+        expected_marker = '- description -'
+        description_start_line = piccolo_find_section_start(3, expected_marker, change_text)
+        expected_marker = '- differences -'
+        diff_start_line = piccolo_find_section_start(description_start_line, expected_marker, change_text)
+
+        # Only overide if not specifed on command line? TODO decided if we always clobber!
+        if not options.summary:
+            options.summary = change_text[3] # 2nd line from of p describe -s descript 493916, etc
+            # clean leading chars 
+            options.summary = options.summary[len('   V  '):]
+        if not options.description:
+            ## TODO release notes!! - they currently get dumped to the end, start would be better
+            options.description = '\n'.join(change_text[description_start_line+2:diff_start_line-1])  # output from p describe -s descript 493916 + p describe -s relnotes 493916
+        
+        difftextlist = []
+        for line in change_text[diff_start_line+2:]:
+            if line:
+                if line.startswith('>') or line.startswith('<') or line.startswith('---') or line[0] in string.digits:
+                    difftextlist.append(line)
+                else:
+                    # Assume we have a piccolo tree + filename + revision
+                    # what about branches?                     raise APIError('PiccoloChangeClient.diff unexpected diff context')
+                    pictree, picfilename, dummy, picrev = line.split()
+                    difftextlist.append('=== %s %s rev %d ====' % (pictree, picfilename, int(picrev)-1))
+
+        difftext = '\n'.join(difftextlist)
+        return (difftext, None)
+    
+    def diff(self, files):
+        if not options.p2changenumber:
+            # Normal compare and diff
+            return self._p_rcompare_diff(files)
+        else:
+            # existing change, either test data or for seeing change in context (not actually going to be reviewed)
+            return self._p_describe_diff(files)
+    
+    def guess_group(self, diff_str):
+        """naive guess IP group based on piccolo branch name/tree
+        Either checks all (default) or uses the path of (only) the first file in the diff
+        """
+        rawstr = r"""^=== (\S*) (\S*) rev (\d+) ====$"""
+        compile_obj = re.compile(rawstr,  re.MULTILINE)
+        STOP_ON_FIRST=True
+        STOP_ON_FIRST=False
+        mailgroups={}
+        for ppath, pfilename, prev in compile_obj.findall(diff_str):
+            if '!gateway!' in ppath:
+                mailgroups['ea'] = None
+            elif ppath.startswith('ingtest!gwts1000'):
+                mailgroups['ea'] = None
+            else:
+                first_two_dirs=ppath.split('!', 2)[:2]
+                if first_two_dirs[0] == 'ingres':
+                    mailgroups[first_two_dirs[1]] = None
+            if STOP_ON_FIRST:
+                break
+        
+        mailgroups=list(mailgroups.keys())
+        mailgroups.sort()
+        result = ','.join(mailgroups)
+        return result
+        
+    def guess_branch(self, diff_str):
+        """naive guess piccolo branch name
+        Uses the path of (only) the first file in the diff, and uses the first 2 directories
+        """
+        tmp_line=diff_str.split(' ', 2)[1] # extract path of first file from piccolo diff header
+        first_two_dirs=tmp_line.split('!', 2)[:2]
+        if first_two_dirs[0] == 'ingres':
+            return first_two_dirs[1]
+        else:
+            return '!'.join(first_two_dirs)
+        
+    def guess_bugs(self, diff_str):
+        """naive guess piccolo bug(s)
+        Uses the bug or sirs found in the (in the additions) diff text.
+        Can either use first found or all (default)
+        Looks for bug or sir numbers on NEW (diff) lines, e.g.:
+        
+            > bug 123456    - MATCH
+            > bug123456     - MATCH
+            > b123456       - MATCH
+            < bug 356789    - do NOT match
+            >     /* see CVLower above, Bug 108802 (move!) */ - MATCH
+            > **  18-Jan-2011 (clach04)
+            > **      Bug 124933, NULL dereference in DAfre_buffer()- MATCH
+            > **      Implemented NUL sanity check in DAfre_buffer()
+            > **      (copied from Oracle gateway).
+
+        """
+        rawstr = r"""^>.*(?P<bug_or_sir>(?:SIR\s*|BUG\s*|b))(?P<bug_or_sir_num>\d*)\W"""
+        compile_obj = re.compile(rawstr, re.IGNORECASE| re.MULTILINE)
+        STOP_ON_FIRST=True
+        STOP_ON_FIRST=False
+        bugs_and_sirs={}
+        for change_type, bnum in compile_obj.findall(diff_str):
+            #change_type = change_type.upper()
+            #if change_type == 'B':
+            #    change_type = 'BUG'
+            try:
+                bnum = str(int(bnum))
+            except ValueError:
+                # that was not an integer!
+                continue
+            bugs_and_sirs[bnum] = None
+            if STOP_ON_FIRST:
+                break
+        
+        bugs_and_sirs_list=list(bugs_and_sirs.keys())
+        bugs_and_sirs_list.sort()
+        result = ','.join(bugs_and_sirs_list)
+        logging.debug("guess bugs: %r" % result)
+        return result
+    
+    def add_options(self, parser):
+        """
+        Adds options to an OptionParser.
+        NOT used in RBTool - artifact from older version :-( Here as a yet-another reminder
+        """
+        ## TODO move this into base class and offer both file passing and reading the contents and passing into diff()
+        ## see http://groups.google.com/group/reviewboard/browse_thread/thread/2c6b6ee44754b6d9
+        ## this way we know the -l flag will not be used in the future for other options! ;-)
+        parser.add_option("-l", "--filelist_filename",
+                          dest="piccolo_flist", default=None,
+                          help='file containing list of files in change, e.g. "p working | grep gwpr > sc"')
+        
+        parser.add_option("-c", "--changenumber",
+                          dest="changenumber", default=None,
+                          help='Piccolo (existing) change number')
+
+### re-define SCMCLIENTS, this makes merging changes easier (than customizing SCMCLIENTS) :-)
+"""
+# VMS no fork emulation
+def not_implemented(*args, **kwargs):
+    ## VMS emulation :-)
+    print (args, kwargs)
+    print 'os.fork is missing'
+    ## stupid traceback gen
+    raise NotImplemented('my fork')
+    #import traceback
+    #traceback.print_exc(file=sys.stderr)
+os.fork = not_implemented ## monkey patch! pretend to be VMS
+subprocess.Popen = not_implemented ## monkey patch! pretend to be VMS
+"""
+SCMCLIENTS = (
+    PiccoloClient(),
+)
+tmp_platform = sys.platform
+if 'java' in tmp_platform.lower():
+    jv_props = sys.getBaseProperties()
+    #jv_props = dict(jv_props)
+    tmp_platform = jv_props['os.name']
+if tmp_platform != 'OpenVMS':
+    # i.e. platform supports subprocess and/or fork
+    SCMCLIENTS = (SVNClient(),) + SCMCLIENTS
+del tmp_platform
+####################################################################
+
 def debug(s):
     """
     Prints debugging information if post-review was run with --debug
     """
     if DEBUG or options and options.debug:
-        print ">>> %s" % s
+        logging.debug(">>> %s" % s)
 
 
 def make_tempfile():
@@ -3269,7 +3783,13 @@ def check_install(command):
                          stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
         return True
-    except OSError:
+    except OSError, oserror_info:
+        # DEBUG/FIXME, I've had an issue under Solaris with Jython where (sometimes) this would fail due to out of memory error (this is worth propagating/raising)
+        logging.debug("subprocess.Popen exception %r", (OSError, oserror_info))
+        """
+        if DEBUG:
+            raise
+        """
         return False
 
 
@@ -3398,6 +3918,36 @@ def load_config_files(homepath):
 
     globals()['user_config'] = _load_config(homepath)
 
+
+def comment_or_close(server):
+    """
+    Add a comment and/or close as submitted
+    """
+    try:
+        review_request = server.get_review_request(options.rid)
+    except APIError, e:
+        die("Error getting review request %s: %s" % (options.rid, e))
+
+    try:
+        if options.comment:
+            server.add_comment(review_request, options.comment)
+
+        if options.close_submitted:
+            server.close_submitted(review_request)
+    except APIError, e:
+        die("Error updating review request %s: %s" % (options.rid, e))
+
+    request_url = 'r/' + str(review_request['id'])
+    review_url = urljoin(server.url, request_url)
+
+    if not review_url.startswith('http'):
+        review_url = 'http://%s' % review_url
+
+    print "Review request #%s updated." % (review_request['id'],)
+    print
+    print review_url
+
+    return review_url
 
 def tempt_fate(server, tool, changenum, diff_content=None,
                parent_diff_content=None, submit_as=None, retries=3):
@@ -3628,12 +4178,126 @@ def parse_options(args):
     parser.add_option("-d", "--debug",
                       action="store_true", dest="debug", default=DEBUG,
                       help="display debug output")
+    #############################################
+    #parser.add_option("--p2-diff-filename", "--diff-filename", "--diff_filename",
+    #                  dest="diff_filename", default=None,
+    #                  help='PICCOLO ONLY: file containing diffs/change, i.e. do not perform diff, just post provided file. See http://reviews.reviewboard.org/r/1197/')
+    
+    parser.add_option("-l", "--p2-filelist-filename",
+                      dest="piccolo_flist", default=None,
+                      help='PICCOLO ONLY: file containing list of files in change, e.g. "p working | grep gwpr > list_of_files"')
+    
+    parser.add_option("-c", "--p2-changenumber",
+                      dest="p2changenumber", default=None,
+                      help='PICCOLO ONLY: Piccolo (existing) change number, takes an existing change and posts for review')
+    
+    parser.add_option("--p2-server",
+                      dest="p2_server", default='usilsuxx:1666', # not sure if this should just be None
+                      help='PICCOLO ONLY: Piccolo repository server name. Piccolo specific version of --repository-url. TODO consider allowing repository-url if piccolo is specified and then ditch this param. Also see http://reviews.reviewboard.org/r/1393')
+    
+    parser.add_option("--p2-do-not-guess-branch",
+                      action="store_false", dest="p2_guess_branch", default=True,
+                      help='PICCOLO ONLY: do NOT auto fill in branch based on first 2 dirs in first file diff')
+    
+    parser.add_option("--p2-do-not-guess-bugs",
+                      action="store_false", dest="p2_guess_bugs", default=True,
+                      help='PICCOLO ONLY: do NOT auto fill in bugs based bug/sir number(s) found in diffs')
+    
+    parser.add_option("--p2-do-not-guess-group",
+                      action="store_false", dest="p2_guess_group", default=True,
+                      help='PICCOLO ONLY: do NOT auto fill in group(s) based path of first file in diffs')
+    
+    parser.add_option("--p2-binary",
+                      dest="p2_binary", default='p', # not sure if this should just be None
+                      help='PICCOLO ONLY: Piccolo executable/binary name.')
+
+    parser.add_option("--add-comment",
+                      dest="comment", default=None,
+                      help="add a free-standing comment ")
+    parser.add_option("--add-comment-file",
+                      dest="comment_file", default=None,
+                      help="file containing test of a free-standing comment ")
+    parser.add_option("--close-submitted",
+                      dest="close_submitted",action="store_true",default=False,
+                      help="close review as submitted")
+    #############################################
     parser.add_option("--diff-filename",
                       dest="diff_filename", default=None,
                       help='upload an existing diff file, instead of '
                            'generating a new diff')
 
     (globals()["options"], args) = parser.parse_args(args)
+
+    if options.comment and options.comment_file:
+        sys.stderr.write("The --add-comment and --add-comment-file options"
+                         " are mutually exclusive.\n")
+        sys.exit(1)
+
+    if options.comment and options.rid is None:
+        sys.stderr.write("The --add-comment option is only valid for existing "
+                         "Review Requests.\n")
+        sys.exit(1)
+
+    if options.comment_file and options.rid is None:
+        sys.stderr.write("The --add-comment-file option is only valid for "
+                         "existing Review Requests.\n")
+        sys.exit(1)
+
+    # in order to avoid an empty "Review Request Changed" box don't allow
+    # add-comment, add-comment-file or close-submitted with any option that
+    # changes another field
+
+    if options.comment and (options.description or options.description_file\
+         or options.publish or options.output_diff_only or options.diff_only \
+         or options.target_groups or options.target_people or options.summary \
+         or options.guess_summary or options.guess_description or options.testing_done \
+         or options.testing_file or options.branch or options.bugs_closed \
+         or options.revision_range or options.label or options.submit_as \
+         or options.diff_filename ):
+        sys.stderr.write("The --add-comment option is only valid when not "
+                         "changing other fields in the Review Request.\n")
+        sys.exit(1)
+
+    if options.comment_file and (options.description or options.description_file\
+         or options.publish or options.output_diff_only or options.diff_only \
+         or options.target_groups or options.target_people or options.summary \
+         or options.guess_summary or options.guess_description or options.testing_done \
+         or options.testing_file or options.branch or options.bugs_closed \
+         or options.revision_range or options.label or options.submit_as \
+         or options.diff_filename ):
+        sys.stderr.write("The --add-comment-file option is only valid when not "
+                         "changing other fields in the Review Request.\n")
+        sys.exit(1)
+
+    if options.close_submitted and (options.description or options.description_file\
+         or options.publish or options.output_diff_only or options.diff_only \
+         or options.target_groups or options.target_people or options.summary \
+         or options.guess_summary or options.guess_description or options.testing_done \
+         or options.testing_file or options.branch or options.bugs_closed \
+         or options.revision_range or options.label or options.submit_as \
+         or options.diff_filename ):
+        sys.stderr.write("The --close-submitted option is only valid when not "
+                         "changing other fields in the Review Request.\n")
+        sys.exit(1)
+
+    if options.comment_file:
+        if os.path.exists(options.comment_file):
+            fp = open(options.comment_file, "r")
+            options.comment = fp.read()
+            fp.close()
+            if not options.comment:
+               sys.stderr.write("The add-comment file %s is empty.\n" %
+                             options.comment_file)
+               sys.exit(1)
+        else:
+            sys.stderr.write("The add-comment file %s does not exist.\n" %
+                             options.comment_file)
+            sys.exit(1)
+
+    if options.close_submitted and options.rid is None:
+        sys.stderr.write("The --close-submitted option is only valid for "
+                         "existing Review Requests.\n")
+        sys.exit(1)
 
     if options.description and options.description_file:
         sys.stderr.write("The --description and --description-file options "
@@ -3726,6 +4390,7 @@ def main():
     cookie_file = os.path.join(homepath, ".post-review-cookies.txt")
     load_config_files(homepath)
 
+    debug('sys.argv %r' % sys.argv)
     args = parse_options(sys.argv[1:])
 
     debug('RBTools %s' % get_version_string())
@@ -3754,7 +4419,9 @@ def main():
     else:
         changenum = None
 
-    if options.revision_range:
+    if options.comment or options.close_submitted:
+        diff, parent_diff = None, None
+    elif options.revision_range:
         diff = tool.diff_between_revisions(options.revision_range, args,
                                            repository_info)
         parent_diff = None
@@ -3766,12 +4433,19 @@ def main():
         if options.diff_filename == '-':
             diff = sys.stdin.read()
         else:
+            cwd = os.path.abspath(os.getcwd())
             try:
-                fp = open(os.path.join(origcwd, options.diff_filename), 'r')
+                # options.diff_filename may be an absolute or a relative path
+                os.chdir(origcwd)
+                # see http://reviews.reviewboard.org/r/1584
+                # VMS cpython base path takes vms paths ike tmp:somefile (tmp device), and then prefixes the current directory!
+                #options.diff_filename = os.path.abspath(options.diff_filename)
+                fp = open(options.diff_filename, 'r')
                 diff = fp.read()
                 fp.close()
             except IOError, e:
                 die("Unable to open diff filename: %s" % e)
+            os.chdir(cwd)
     else:
         diff, parent_diff = tool.diff(args)
 
@@ -3780,6 +4454,95 @@ def main():
 
     if (isinstance(tool, PerforceClient) or
         isinstance(tool, PlasticClient)) and changenum is not None:
+    
+    ################################################################
+    if diff and isinstance(tool, PiccoloClient) and options.p2_guess_branch and options.branch is None:
+        options.branch = tool.guess_branch(diff)
+        #print 'debug', 'options.branch', options.branch
+        #raise SystemExit()
+    
+    if diff and isinstance(tool, PiccoloClient) and options.p2_guess_bugs and options.bugs_closed is None:
+        options.bugs_closed = tool.guess_bugs(diff)
+    
+    if diff and isinstance(tool, PiccoloClient) and options.p2_guess_group and options.target_groups is None:
+        options.target_groups = tool.guess_group(diff)
+    
+    ## add template
+    if diff and isinstance(tool, PiccoloClient) and options.rid is None and options.description is None:
+        options.description = '''For template help and more details see http://inspect.ingres.com/r/32/
+
+Targeted submission date
+
+    EDITME_DATE_TO_SUBMIT
+
+Private Path:
+
+    EDITME_P2_CLIENT_INFO
+
+Bug Release Notes
+
+    Format before submission with:
+        !}fmt -w 70  (or gq return in VIM)
+    See http://hasty/GW-info/GatewayReleaseNotes.htm
+
+    (GATEWAY, QA, DEVELOPMENT)
+    Bug release note in form of bug report, not fix report.
+    Bug numbers should not be re-used once a release has been
+    provided to either QA or a customer containing a fix for
+    the original bug number
+    (EDITME_BUGNUM)
+
+Related Service Desk Issues: EDITME 
+
+Related change numbers: EDITME 
+
+Propagation to Other code-lines:
+
+    Candidate for merging into EDITME_CODELINE(S) after submission into this codeline.
+
+Change Description:
+
+Format before submission with !}fmt -w 70  (or gq return in VIM)
+
+-----------------------------------------------------------
+EDITME_DESCRIPTION
+-----------------------------------------------------------
+
+New or removed Functions:
+
+    EDITME 
+
+CL Interface changes:
+
+    EDITME 
+
+Documentation Impact:
+
+    EDITME 
+
+Design and documentation Links:
+
+    EDITME 
+
+'''
+        one_day = datetime.timedelta(1)
+        submit_date = datetime.date.today() + 3*one_day
+        options.description = options.description.replace('EDITME_DATE_TO_SUBMIT', str(submit_date))
+        p2_client_info = tool._p_here_txt
+        options.description = options.description.replace('EDITME_P2_CLIENT_INFO', p2_client_info)
+        
+        ## TODO if guess bug number, could prefill in relnotes section too...
+        ## TODO if guess branch went well and was NOT 'main', could prefill in merge/cross integration section too...
+        
+        OS_USER_ENV = options.username or options.submit_as or os.environ.get('USER') or os.environ.get('USERNAME')
+        if OS_USER_ENV == 'clach04':
+            # clach04 special, save me some typing (being the maintainer has perks).....
+            options.description = options.description.replace(' EDITME ', ' None.')
+            options.description = options.description.replace('    (EDITME_BUGNUM)', '    (EDITME_BUGNUM)\n    None')
+            options.description = options.description.replace('    Candidate for merging into EDITME_CODELINE(S) after submission into this codeline.', '    Candidate for merging into EDITME_CODELINE(S) after submission into this codeline.\n    Not a Candidate for merging into other codeline(s).')
+    ################################################################
+    
+    if isinstance(tool, PerforceClient) and changenum is not None:
         changenum = tool.sanitize_changenum(changenum)
 
         # NOTE: In Review Board 1.5.2 through 1.5.3.1, the changenum support
@@ -3798,7 +4561,10 @@ def main():
     # Let's begin.
     server.login()
 
-    review_url = tempt_fate(server, tool, changenum, diff_content=diff,
+    if options.comment or options.close_submitted:
+       review_url = comment_or_close(server)
+    else:
+       review_url = tempt_fate(server, tool, changenum, diff_content=diff,
                             parent_diff_content=parent_diff,
                             submit_as=options.submit_as)
 

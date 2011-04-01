@@ -1,0 +1,16 @@
+Issue: Crossing a change with new files may fail if Diffs for other files can't be resolved
+Private Path: MACHINE NAME AND IDEALLY PICCOLO CLIENT NAME
+
+Release Notes:
+
+123
+    (GENERIC)
+    <tbd>
+
+Merging into other code lines:
+
+   Candidate for merging into main and ingres93 after submission into this codeline.
+
+Description of changes:
+
+DESCRIPTION GOES HERE

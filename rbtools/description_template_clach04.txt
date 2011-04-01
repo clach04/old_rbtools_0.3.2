@@ -1,0 +1,82 @@
+
+Integration Plan template from Chris Clark (gateway focused)
+
+
+Targeted submission date
+
+    Feb 17, 2009
+
+
+
+Related change numbers
+
+    None
+
+
+Private Path
+
+    scorpion_ingres2006r2_GA ingres2006r2 gateway 2.7 dev build area
+    installation GA (non-baroque)
+    hawk ingres26 gateway 2.6 dev build area installation G6 (non-baroque)
+    ussnsu31 gwts1000 build area installation GQ (non-baroque)
+
+
+
+Additional tests/testing
+
+    NOTE THIS COULD BE THE TESTING SECTION IN REVIEWBOARD
+    None
+
+
+Bug Release Notes
+
+    Format before submission with:
+        !}fmt -w 70
+    See http://hasty/GW-info/GatewayReleaseNotes.htm
+
+
+    (GATEWAY, QA, DEVELOPMENT)
+    None
+    Bug release note in form of bug report, not fix report.
+    Bug numbers should not be re-used once a release has been
+    provided to either QA or a customer containing a fix for
+    the original bug number
+    (BUGNUM)
+    Same as original/current release note
+
+
+Change Description
+
+Format before submission with *!}fmt -w 70*
+
+    I changed some stuff
+
+
+Affected Facilities (trees/dirs)
+
+output from:
+p reserved | p rcompare -l - | grep === | cut "-d " -f2 |sort -u
+p reserved | cut -d\  -f1 | sort -u
+p reserved | cut "-d "  -f1 | sort -u
+p reserved | awk '{print $1}' |sort -u
+
+    ingtest!gwts1000!user!guide
+
+
+Expected impact on installations and/or builds:
+
+    None
+
+
+
+Affected files
+
+   output from:
+   p reserved | p rcompare -l - | grep === | cut "-d " -f2,3,5
+   p reserved | cut -d\  -f1-3
+   p reserved | cut "-d "  -f1-3
+   p reserved | awk '{print $1,$2,$3}'
+
+
+   ingtest!gwts1000!user!guide clientmap.template change -> 3
+
