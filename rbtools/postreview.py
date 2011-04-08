@@ -4597,8 +4597,11 @@ def main():
     else:
         diff, parent_diff = tool.diff(args)
 
-    if len(diff) == 0:
-        die("There don't seem to be any diffs!")
+    # If using flags that do not require diffs (e.g. post a comment, set closed:submitted/discarded)
+    # Diff may well be none
+    if not (options.comment or options.close_submitted):
+        if len(diff) == 0:
+            die("There don't seem to be any diffs!")
 
     if (isinstance(tool, PerforceClient) or
         isinstance(tool, PlasticClient)) and changenum is not None:
