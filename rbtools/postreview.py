@@ -15,7 +15,6 @@ import string
 import datetime
 import urllib
 import urllib2
-from datetime import datetime
 from optparse import OptionParser
 try:
     # setuptools from http://peak.telecommunity.com/
