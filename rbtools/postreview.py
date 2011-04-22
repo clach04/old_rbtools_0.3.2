@@ -3760,10 +3760,24 @@ class PiccoloClient(SCMClient):
                 else:
                     # Assume we have a piccolo tree + filename + revision
                     # what about branches?                     raise APIError('PiccoloChangeClient.diff unexpected diff context')
-                    pictree, picfilename, dummy, picrev = line.split()
-                    difftextlist.append('=== %s %s rev %d ====' % (pictree, picfilename, int(picrev)-1))
+                    try:
+                        pictree, picfilename, dummy, picrev = line.split()  # for changes
+                        file_addition = False
+                    except ValueError:
+                        # crappy file name extraction
+                        pictree, picfilename, dummy1, dummy2, dummy3, picrev = line.split()  # for file additions
+                        picrev = picrev[:-1] #  lose trailing period
+                        file_addition = True
+                    die("ERROR; Change has a file addition, extracting file addition diffs not implemented. Line\n %r" % line.split())
 
-        difftext = '\n'.join(difftextlist)
+                    assert '!' in pictree
+                    #import pdb ; pdb.set_trace()
+                    difftextlist.append('=== %s %s rev %d ====' % (pictree, picfilename, int(picrev)-1))
+        if file_addition:
+            diff_header = '0a%d,%d\n> ' % (1, len(difftextlist))
+            difftext = '\n> '.join(difftextlist)
+        else:
+            difftext = '\n'.join(difftextlist)
         return (difftext, None)
     
     def diff(self, files):
