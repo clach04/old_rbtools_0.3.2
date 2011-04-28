@@ -3667,6 +3667,24 @@ class PiccoloClient(SCMClient):
                     print 'WARNING piccolo - param to -l not supported (yet?), ignoring and assuming all (working) files'
                     options.piccolo_flist = None
             
+            # Naive "check all working files for integration"
+            # Ideally would use file list but wneed errors if files are specified
+            pic_command_str = '%s wneed' % (self.p_bin,)
+            integration_text = execute(self._command_args + [pic_command_str], extra_ignore_errors=(1,))
+            if integration_text:
+                warn_text = '''
+WARNING opened files are not at headrevs, integration needed before submission.
+NOTE this check is for all open files not those specified for review.
+
+These files need integrating:
+
+''' + integration_text
+                print warn_text
+            if not options.p2_ignore_wneed:
+                die('\nThis error can be ignored by specifying the "--p2-ignore-wneed" flag.')
+            
+            ########### end integration check
+            
             # Set piccolo command line command
             # TODO do we need to redirect and capture stderr? "2>&1".
             """
@@ -4369,6 +4387,10 @@ def parse_options(args):
     parser.add_option("--p2-do-not-guess-group",
                       action="store_false", dest="p2_guess_group", default=True,
                       help='PICCOLO ONLY: do NOT auto fill in group(s) based path of first file in diffs')
+    
+    parser.add_option("--p2-ignore-wneed",
+                      action="store_true", dest="p2_ignore_wneed", default=False,
+                      help='PICCOLO ONLY: do NOT fail if opened files are not at headrevs')
     
     parser.add_option("--p2-binary",
                       dest="p2_binary", default='p', # not sure if this should just be None
