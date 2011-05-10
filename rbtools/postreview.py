@@ -3693,8 +3693,8 @@ These files need integrating:
 
 ''' + integration_text
                 print warn_text
-            if not options.p2_ignore_wneed:
-                die('\nThis error can be ignored by specifying the "--p2-ignore-wneed" flag.')
+                if not options.p2_ignore_wneed:
+                    die('\nThis error can be ignored by specifying the "--p2-ignore-wneed" flag.')
             
             ########### end integration check
             
