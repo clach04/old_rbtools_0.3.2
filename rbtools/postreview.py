@@ -4691,7 +4691,7 @@ Bug Release Notes
 
     Format before submission with:
         !}fmt -w 70  (or gq return in VIM)
-    See http://hasty/GW-info/GatewayReleaseNotes.htm
+    See http://wiki.ingres.prv/bin/view/Engineering/GatewayReleaseNotes
 
     (GATEWAY, QA, DEVELOPMENT)
     Bug release note in form of bug report, not fix report.
