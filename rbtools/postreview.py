@@ -3793,13 +3793,16 @@ These files need integrating:
                     # what about branches?                     raise APIError('PiccoloChangeClient.diff unexpected diff context')
                     try:
                         pictree, picfilename, dummy, picrev = line.split()  # for changes
+                        logging.debug('in try %r', (pictree, picfilename, int(picrev)))
                         file_addition = False
                     except ValueError:
                         # crappy file name extraction
                         pictree, picfilename, dummy1, dummy2, dummy3, picrev = line.split()  # for file additions
                         picrev = picrev[:-1] #  lose trailing period
+                        logging.debug('in except %r', (pictree, picfilename, int(picrev)))
                         file_addition = True
-                    die("ERROR; Change has a file addition, extracting file addition diffs not implemented. Line\n %r" % line.split())
+                    if file_addition:
+                        die("ERROR; Change has a file addition, extracting file addition diffs not implemented. Line\n %r" % line.split())
 
                     assert '!' in pictree
                     #import pdb ; pdb.set_trace()
