@@ -210,7 +210,7 @@ except ImportError:
 #   REVIEWBOARD_URL = "http://reviewboard.example.com"
 #
 REVIEWBOARD_URL = None
-#REVIEWBOARD_URL = 'http://reviewboard.ingres.prv'
+REVIEWBOARD_URL = 'http://reviewboard.ingres.prv'  # default to Actian server
 
 # Default submission arguments.  These are all optional; run this
 # script with --help for descriptions of each argument.
@@ -324,7 +324,19 @@ class SvnRepositoryInfo(RepositoryInfo):
             if repository['tool'] != 'Subversion':
                 continue
 
-            info = self._get_repository_info(server, repository)
+            # Actian hack - RB server errors  1 out of 5 svn path lookups
+            # horrible hack to just ignore problem :-(
+            import httplib  # ughn! :-(
+            max_get_repository_info_retries = 5
+            while max_get_repository_info_retries:
+                max_get_repository_info_retries -= 1
+                try:
+                    info = self._get_repository_info(server, repository)
+                    break
+                except httplib.BadStatusLine, e:
+                    logging.warning('SVN look up failed about to retry. Details %r', (max_get_repository_info_retries, httplib.BadStatusLine, e))
+                    if not max_get_repository_info_retries:
+                        raise
 
             if not info or self.uuid != info['uuid']:
                 continue
@@ -3486,6 +3498,8 @@ def my_setup_debug():
         #logging.basicConfig()
         #logging.basicConfig(filename=LOG_FILENAME, format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
         logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.DEBUG,)
+    else:
+        logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.INFO,)
 my_setup_debug()
 
 class PiccoloClient(SCMClient):
