@@ -3762,11 +3762,45 @@ These files need integrating:
         
         TODO merge into PiccoloClient (i.e. remove PiccoloChangeClient) so that if -c flag is present it does changes
         """
+        try:
+            #raise ImportError
+            import pypiccolo
+        except ImportError:
+            pypiccolo = None
+
         if not options.p2changenumber:
             raise APIError('piccolo changenumber missing on command line')
         
+        if pypiccolo:
+            
+            try:
+                #raise ImportError
+                import cStringIO as StringIO
+            except ImportError:
+                import StringIO
+            
+            changenum = options.p2changenumber
+            change_style = 'full'
+            piccolo_lib = pypiccolo.guess_piccolo_lib()
+            
+            """
+            debug_file = open('/tmp/change_full.txt', 'r')
+            change_text = debug_file.read()
+            debug_file.close()
+            """
+            p = pypiccolo.Piccolo()
+            piccolo_file_obj = StringIO.StringIO()
+            return_code = p.describe(changenum, change_style=change_style, piccolo_lib=piccolo_lib, fileptr=piccolo_file_obj)
+            change_text = piccolo_file_obj.getvalue()
+            piccolo_file_obj.close()
+        else:
+            change_text = execute([self.p_bin, 'describe', '-s', 'full', options.p2changenumber])
         #FIXME parse and then transform the diff
-        change_text = execute([self.p_bin, 'describe', '-s', 'full', options.p2changenumber])
+        ################ DEBUG
+        #debug_file = open('/tmp/change_full.txt', 'w')
+        #debug_file.write(change_text)
+        #debug_file.close()
+        ################ DEBUG
         change_text = change_text.split('\n')
         
         def piccolo_find_section_start(startcount, expected_marker, change_text):
@@ -3795,11 +3829,26 @@ These files need integrating:
             options.summary = options.summary[len('   V  '):]
         if not options.description:
             ## TODO release notes!! - they currently get dumped to the end, start would be better
+            p2_existing_change_warning_line = '-' * 65 + '\n\n'
+            p2_existing_change_warning = 'WARNING files that were ADDED have been stripped out\n\n'
+            
             options.description = '\n'.join(change_text[description_start_line+2:diff_start_line-1])  # output from p describe -s descript 493916 + p describe -s relnotes 493916
+            options.description = p2_existing_change_warning + p2_existing_change_warning_line + options.description + '\n' + p2_existing_change_warning_line + p2_existing_change_warning
         
         difftextlist = []
+        file_addition = False
+        skip_file_additions = False
+        #skip_file_additions = True  # FIXME debug it does work, just not ready for prime time yet
         for line in change_text[diff_start_line+2:]:
             if line:
+                if file_addition and skip_file_additions:
+                    # really dumb "is this a new file header" check,
+                    # not safe if file has a line that starts with 'ingres!'
+                    if line.startswith('ingres!'):
+                        file_addition = False
+                    else:
+                        # chomp and throw away
+                        continue
                 if line.startswith('>') or line.startswith('<') or line.startswith('---') or line[0] in string.digits:
                     difftextlist.append(line)
                 else:
@@ -3816,16 +3865,28 @@ These files need integrating:
                         logging.debug('in except %r', (pictree, picfilename, int(picrev)))
                         file_addition = True
                     if file_addition:
-                        die("ERROR; Change has a file addition, extracting file addition diffs not implemented. Line\n %r" % line.split())
+                        #import pdb ; pdb.set_trace()
+                        if skip_file_additions:
+                            print 'WARNING ignoring ADD file: %r' % line  # FIXME use log.info()
+                        else:
+                            die("ERROR; Change has a file addition, extracting file addition diffs not implemented. Line\n %r" % line.split())
 
                     assert '!' in pictree
-                    #import pdb ; pdb.set_trace()
-                    difftextlist.append('=== %s %s rev %d ====' % (pictree, picfilename, int(picrev)-1))
+                    if not file_addition:
+                        difftextlist.append('=== %s %s rev %d ====' % (pictree, picfilename, int(picrev)-1))
+        
+        if skip_file_additions:
+            # DEBUG reset
+            if file_addition:
+                file_addition = False
+        
         if file_addition:
             diff_header = '0a%d,%d\n> ' % (1, len(difftextlist))
             difftext = '\n> '.join(difftextlist)
         else:
+            print 'add tail'
             difftext = '\n'.join(difftextlist)
+        
         return (difftext, None)
     
     def diff(self, files):
@@ -4689,7 +4750,7 @@ def main():
     if diff and isinstance(tool, PiccoloClient) and options.p2_guess_bugs and options.bugs_closed is None:
         options.bugs_closed = tool.guess_bugs(diff)
     
-    if diff and isinstance(tool, PiccoloClient) and options.p2_guess_group and options.target_groups is None:
+    if diff and isinstance(tool, PiccoloClient) and options.p2_guess_group and not options.p2changenumber and options.target_groups is None:
         options.target_groups = tool.guess_group(diff)
     
     ## add template
