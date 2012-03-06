@@ -4,6 +4,7 @@ Issue:
 NOTE using Python 2.4, this results in an exe about 4Mb in size.
 NOTE using Python 2.6, this results in an exe about 5.5Mb in size.
 
+    E:\Python24\python.exe ingres_setup.py py2exe
     c:\python24\python ingres_setup.py py2exe
     setup.py py2exe
 
