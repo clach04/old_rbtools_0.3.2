@@ -3705,10 +3705,10 @@ NOTE this check is for all open files not those specified for review.
 
 These files need integrating:
 
-''' + integration_text
+%s''' % integration_text
                 print warn_text
                 if not options.p2_ignore_wneed:
-                    die('\nThis error can be ignored by specifying the "--p2-ignore-wneed" flag.')
+                    die('Review left unmodified, that is; diffs not uploaded to server.\nThis error can be ignored by specifying the "--p2-ignore-wneed" flag.')
             
             ########### end integration check
             
