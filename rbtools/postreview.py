@@ -222,7 +222,7 @@ OPEN_BROWSER    = False
 
 # Debugging.  For development...
 DEBUG           = False
-#DEBUG           = True
+#DEBUG           = True  # required as --debug flag doesn't log everything, somethings occur before arg parsing
 
 ###
 # End user-settable variables.
@@ -3549,7 +3549,7 @@ class PiccoloClient(SCMClient):
             perform_piccolo_check=False
             logging.debug("not going to perform piccolo check")
         else:
-            logging.info('diff_filename %r', options.diff_filename)
+            logging.debug('diff_filename %r', options.diff_filename)
             if options.diff_filename:
                 perform_piccolo_check=False
             else:
@@ -3625,7 +3625,7 @@ class PiccoloClient(SCMClient):
                 check_gnu_diff()
         else:
             self._p_here_txt = 'EDITME_P2_CLIENT_INFO'  ## TODO do at least minimum hostname and pwd?
-        logging.info('self._p_here_txt %r', self._p_here_txt)
+        logging.debug('self._p_here_txt %r', self._p_here_txt)
         
         if options.submit_as is None:
             options.submit_as = os.environ.get('USER')
@@ -3669,9 +3669,9 @@ class PiccoloClient(SCMClient):
         NOTE recommended absolute minimum version of piccolo client is 2.2.1alpha; (for binary and deleted file improvements on diffs/rcompare)
         NOTE recommended minimum version of piccolo client is 2.2.0; for -c option to "p version"
         """
-        logging.info('CMC files %r', files)
-        logging.info('CMC options.piccolo_flist %r', options.piccolo_flist)
-        logging.info('CMC options.diff_filename %r', options.diff_filename)
+        logging.debug('CMC files %r', files)
+        logging.debug('CMC options.piccolo_flist %r', options.piccolo_flist)
+        logging.debug('CMC options.diff_filename %r', options.diff_filename)
         if options.diff_filename:
             """Example:
             
