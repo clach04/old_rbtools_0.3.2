@@ -3733,7 +3733,7 @@ These files need integrating:
                 pflag_sane_integration_diffs = '-i'
             # use -s flag for server side diffs to ensure consistent "\ No newline at end of file" output (e.g. like gnu diff) if newlines are missing at EOF. NOTE server side diffs fail for new reserved files :-(
             pic_command_str = '%s working %s | %s rcompare %s -s -l -' % (self.p_bin, working_params, self.p_bin, pflag_sane_integration_diffs)  # -s for consistent server side diffs, but.....
-            pic_command_str = '%s working %s | %s have -l - | %s rcompare %s -l -' % (self.p_bin, working_params, self.p_bin, self.p_bin, pflag_sane_integration_diffs)  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
+            pic_command_str = '%s working %s | %s rcompare %s -l -' % (self.p_bin, working_params, self.p_bin, pflag_sane_integration_diffs)  # remove "-s", DEBUG TEST. -s flag to rcompare freaks piccolo out if file is being added
             # be nice if piccolo rcompare supported a new param -working (or similar)
             
             diff_text=execute(self._command_args + [pic_command_str], extra_ignore_errors=(1,))
