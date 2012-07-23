@@ -4520,7 +4520,7 @@ def parse_options(args):
          or options.target_groups or options.target_people or options.summary \
          or options.guess_summary or options.guess_description or options.testing_done \
          or options.testing_file or options.branch or options.bugs_closed \
-         or options.revision_range or options.label or options.submit_as \
+         or options.revision_range or options.submit_as \
          or options.diff_filename ):
         sys.stderr.write("The --add-comment option is only valid when not "
                          "changing other fields in the Review Request.\n")
@@ -4531,7 +4531,7 @@ def parse_options(args):
          or options.target_groups or options.target_people or options.summary \
          or options.guess_summary or options.guess_description or options.testing_done \
          or options.testing_file or options.branch or options.bugs_closed \
-         or options.revision_range or options.label or options.submit_as \
+         or options.revision_range or options.submit_as \
          or options.diff_filename ):
         sys.stderr.write("The --add-comment-file option is only valid when not "
                          "changing other fields in the Review Request.\n")
@@ -4542,7 +4542,7 @@ def parse_options(args):
          or options.target_groups or options.target_people or options.summary \
          or options.guess_summary or options.guess_description or options.testing_done \
          or options.testing_file or options.branch or options.bugs_closed \
-         or options.revision_range or options.label or options.submit_as \
+         or options.revision_range or options.submit_as \
          or options.diff_filename ):
         sys.stderr.write("The --close-submitted option is only valid when not "
                          "changing other fields in the Review Request.\n")
@@ -4846,3 +4846,4 @@ Design and documentation Links:
 
 if __name__ == "__main__":
     main()
+
